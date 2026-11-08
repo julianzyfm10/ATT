@@ -1,0 +1,233 @@
+"""Overview metrics aggregation and automatic conclusion generation."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Sequence
+
+from toolsim.core.utils import extract_last_query_hits
+from toolsim.evaluators.trajectory_evaluator import summarize_trajectory_difference
+
+if TYPE_CHECKING:
+    from toolsim.runners.comparison_runner import ComparisonResult
+
+
+@dataclass
+class OverviewMetrics:
+    """Aggregate metrics across multiple comparison cases."""
+
+    total_cases: int
+    stateful_goal_pass_count: int
+    stateless_goal_pass_count: int
+    stateful_all_calls_succeeded_count: int
+    stateless_all_calls_succeeded_count: int
+    stateful_total_steps_sum: int
+    stateless_total_steps_sum: int
+    stateful_avg_steps: float
+    stateless_avg_steps: float
+    stateful_success_rate: float
+    stateless_success_rate: float
+    stateful_invalid_call_rate: float
+    stateless_invalid_call_rate: float
+    stateful_recovery_rate: float
+    stateless_recovery_rate: float
+    stateful_final_state_correctness: float
+    stateless_final_state_correctness: float
+    cases_with_step_count_difference: int
+    cases_with_explicit_dependency_resolution: int
+    cases_with_query_before_index: int
+    cases_with_overwrite_without_reindex: int
+    cases_with_trajectory_divergence: int
+    cases_with_snapshot_semantics_difference: int
+    cases_with_retrieval_outcome_difference: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_cases": self.total_cases,
+            "stateful_goal_pass_count": self.stateful_goal_pass_count,
+            "stateless_goal_pass_count": self.stateless_goal_pass_count,
+            "stateful_all_calls_succeeded_count": self.stateful_all_calls_succeeded_count,
+            "stateless_all_calls_succeeded_count": self.stateless_all_calls_succeeded_count,
+            "stateful_total_steps_sum": self.stateful_total_steps_sum,
+            "stateless_total_steps_sum": self.stateless_total_steps_sum,
+            "stateful_avg_steps": self.stateful_avg_steps,
+            "stateless_avg_steps": self.stateless_avg_steps,
+            "stateful_success_rate": self.stateful_success_rate,
+            "stateless_success_rate": self.stateless_success_rate,
+            "stateful_invalid_call_rate": self.stateful_invalid_call_rate,
+            "stateless_invalid_call_rate": self.stateless_invalid_call_rate,
+            "stateful_recovery_rate": self.stateful_recovery_rate,
+            "stateless_recovery_rate": self.stateless_recovery_rate,
+            "stateful_final_state_correctness": self.stateful_final_state_correctness,
+            "stateless_final_state_correctness": self.stateless_final_state_correctness,
+            "cases_with_step_count_difference": self.cases_with_step_count_difference,
+            "cases_with_explicit_dependency_resolution": self.cases_with_explicit_dependency_resolution,
+            "cases_with_query_before_index": self.cases_with_query_before_index,
+            "cases_with_overwrite_without_reindex": self.cases_with_overwrite_without_reindex,
+            "cases_with_trajectory_divergence": self.cases_with_trajectory_divergence,
+            "cases_with_snapshot_semantics_difference": self.cases_with_snapshot_semantics_difference,
+            "cases_with_retrieval_outcome_difference": self.cases_with_retrieval_outcome_difference,
+        }
+
+
+def compute_overview_metrics(results: Sequence["ComparisonResult"]) -> OverviewMetrics:
+    """Aggregate per-case comparison results into a single OverviewMetrics summary."""
+    total_cases = len(results)
+    stateful_total_steps_sum = 0
+    stateless_total_steps_sum = 0
+    stateful_successful_calls = 0
+    stateless_successful_calls = 0
+    stateful_invalid_calls = 0
+    stateless_invalid_calls = 0
+    stateful_recovery_opportunities = 0
+    stateless_recovery_opportunities = 0
+    stateful_recovered_cases = 0
+    stateless_recovered_cases = 0
+    cases_with_step_count_difference = 0
+    cases_with_explicit_dependency_resolution = 0
+    cases_with_query_before_index = 0
+    cases_with_overwrite_without_reindex = 0
+    cases_with_trajectory_divergence = 0
+    cases_with_snapshot_semantics_difference = 0
+    cases_with_retrieval_outcome_difference = 0
+
+    for result in results:
+        trajectory = summarize_trajectory_difference(result)
+        stateful_total_steps_sum += trajectory.stateful_total_steps
+        stateless_total_steps_sum += trajectory.stateless_total_steps
+        stateful_successful_calls += result.stateful_result.call_metrics.successful_calls
+        stateless_successful_calls += result.stateless_result.call_metrics.successful_calls
+        stateful_invalid_calls += result.stateful_result.call_metrics.invalid_calls
+        stateless_invalid_calls += result.stateless_result.call_metrics.invalid_calls
+
+        if result.stateful_result.call_metrics.failed_calls > 0:
+            stateful_recovery_opportunities += 1
+            if result.summary.get("stateful_all_goals_passed") is True:
+                stateful_recovered_cases += 1
+        if result.stateless_result.call_metrics.failed_calls > 0:
+            stateless_recovery_opportunities += 1
+            if result.summary.get("stateless_all_goals_passed") is True:
+                stateless_recovered_cases += 1
+
+        if trajectory.stateful_total_steps != trajectory.stateless_total_steps:
+            cases_with_step_count_difference += 1
+
+        if "explicit indexing" in trajectory.key_process_difference:
+            cases_with_explicit_dependency_resolution += 1
+
+        if "queried before dependency completion" in trajectory.key_process_difference:
+            cases_with_query_before_index += 1
+
+        if "overwrite-without-reindex" in trajectory.key_process_difference:
+            cases_with_overwrite_without_reindex += 1
+
+        if trajectory.stateful_tool_sequence != trajectory.stateless_tool_sequence:
+            cases_with_trajectory_divergence += 1
+
+        if _has_snapshot_semantics_difference(result, trajectory):
+            cases_with_snapshot_semantics_difference += 1
+
+        if _has_retrieval_outcome_difference(result):
+            cases_with_retrieval_outcome_difference += 1
+
+    stateful_goal_pass_count = sum(
+        1 for result in results if result.summary.get("stateful_all_goals_passed") is True
+    )
+    stateless_goal_pass_count = sum(
+        1 for result in results if result.summary.get("stateless_all_goals_passed") is True
+    )
+    stateful_all_calls_succeeded_count = sum(
+        1 for result in results if result.summary.get("stateful_all_calls_succeeded") is True
+    )
+    stateless_all_calls_succeeded_count = sum(
+        1 for result in results if result.summary.get("stateless_all_calls_succeeded") is True
+    )
+
+    return OverviewMetrics(
+        total_cases=total_cases,
+        stateful_goal_pass_count=stateful_goal_pass_count,
+        stateless_goal_pass_count=stateless_goal_pass_count,
+        stateful_all_calls_succeeded_count=stateful_all_calls_succeeded_count,
+        stateless_all_calls_succeeded_count=stateless_all_calls_succeeded_count,
+        stateful_total_steps_sum=stateful_total_steps_sum,
+        stateless_total_steps_sum=stateless_total_steps_sum,
+        stateful_avg_steps=(stateful_total_steps_sum / total_cases) if total_cases else 0.0,
+        stateless_avg_steps=(stateless_total_steps_sum / total_cases) if total_cases else 0.0,
+        stateful_success_rate=_safe_rate(stateful_successful_calls, stateful_total_steps_sum),
+        stateless_success_rate=_safe_rate(stateless_successful_calls, stateless_total_steps_sum),
+        stateful_invalid_call_rate=_safe_rate(stateful_invalid_calls, stateful_total_steps_sum),
+        stateless_invalid_call_rate=_safe_rate(stateless_invalid_calls, stateless_total_steps_sum),
+        stateful_recovery_rate=_safe_rate(stateful_recovered_cases, stateful_recovery_opportunities),
+        stateless_recovery_rate=_safe_rate(stateless_recovered_cases, stateless_recovery_opportunities),
+        stateful_final_state_correctness=_safe_rate(stateful_goal_pass_count, total_cases),
+        stateless_final_state_correctness=_safe_rate(stateless_goal_pass_count, total_cases),
+        cases_with_step_count_difference=cases_with_step_count_difference,
+        cases_with_explicit_dependency_resolution=cases_with_explicit_dependency_resolution,
+        cases_with_query_before_index=cases_with_query_before_index,
+        cases_with_overwrite_without_reindex=cases_with_overwrite_without_reindex,
+        cases_with_trajectory_divergence=cases_with_trajectory_divergence,
+        cases_with_snapshot_semantics_difference=cases_with_snapshot_semantics_difference,
+        cases_with_retrieval_outcome_difference=cases_with_retrieval_outcome_difference,
+    )
+
+
+def _safe_rate(numerator: int | float, denominator: int | float) -> float:
+    return (numerator / denominator) if denominator else 0.0
+
+
+def generate_overall_conclusion(overview_metrics: OverviewMetrics) -> str:
+    """Generate a natural-language conclusion from aggregated overview metrics."""
+    sentences: list[str] = []
+
+    if (
+        overview_metrics.cases_with_explicit_dependency_resolution > 0
+        or overview_metrics.stateful_avg_steps > overview_metrics.stateless_avg_steps
+    ):
+        sentences.append(
+            "Across the evaluated cases, the stateful setting introduced explicit dependency-management steps "
+            "that were absent or less prominent in the stateless baseline."
+        )
+
+    if overview_metrics.cases_with_trajectory_divergence > 0:
+        sentences.append(
+            "The two settings also exhibited stable trajectory-level divergence, indicating that the stateful "
+            "formulation changes the tool-use process rather than only the final outcome."
+        )
+
+    if overview_metrics.cases_with_snapshot_semantics_difference > 0:
+        sentences.append(
+            "The stateful environment preserved index-time snapshot semantics in cases involving overwrite without "
+            "re-index, whereas the stateless baseline reflected only the latest file content."
+        )
+
+    if overview_metrics.cases_with_retrieval_outcome_difference > 0:
+        sentences.append(
+            "These process differences were accompanied by retrieval outcome differences in a subset of cases."
+        )
+
+    if not sentences:
+        sentences.append(
+            "Across the evaluated cases, the stateless and stateful settings showed limited aggregate "
+            "differences under the current minimal prototype."
+        )
+
+    return " ".join(sentences[:3])
+
+
+def _has_snapshot_semantics_difference(result: "ComparisonResult", trajectory: Any) -> bool:
+    if "overwrite-without-reindex" not in trajectory.key_process_difference:
+        return False
+    stateful_hits = extract_last_query_hits(result.stateful_result.trace)
+    stateless_hits = extract_last_query_hits(result.stateless_result.trace)
+    return bool(stateful_hits) and not bool(stateless_hits)
+
+
+def _has_retrieval_outcome_difference(result: "ComparisonResult") -> bool:
+    stateful_hits = _normalize_hits(extract_last_query_hits(result.stateful_result.trace))
+    stateless_hits = _normalize_hits(extract_last_query_hits(result.stateless_result.trace))
+    return stateful_hits != stateless_hits
+
+
+def _normalize_hits(hits: list[dict[str, Any]]) -> list[tuple]:
+    """Normalise a list of search hits to (file_id, content) tuples for comparison."""
+    return [(hit.get("file_id"), hit.get("content")) for hit in hits]

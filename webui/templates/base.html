@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AgentInferKit - Benchmark Platform{% endblock %}</title>
+    
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/css/main.css">
+    {% block extra_css %}{% endblock %}
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+    <!-- i18n -->
+    <script src="/static/js/i18n.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">
+                    <div class="logo-icon"><i data-lucide="brain-circuit"></i></div>
+                    <div class="logo-text">
+                        AgentInferKit
+                        <span class="logo-version">v1.0.0</span>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item {% if active_tab == 'dashboard' %}active{% endif %}" data-tab="dashboard">
+                    <span class="nav-item-icon"><i data-lucide="layout-dashboard"></i></span>
+                    <span data-i18n="nav.dashboard">Dashboard</span>
+                </a>
+                <a href="#datasets" class="nav-item {% if active_tab == 'datasets' %}active{% endif %}" data-tab="datasets">
+                    <span class="nav-item-icon"><i data-lucide="database"></i></span>
+                    <span data-i18n="nav.datasets">数据集管理</span>
+                </a>
+                <a href="#experiments" class="nav-item {% if active_tab == 'experiments' %}active{% endif %}" data-tab="experiments">
+                    <span class="nav-item-icon"><i data-lucide="flask-conical"></i></span>
+                    <span data-i18n="nav.experiments">实验配置</span>
+                </a>
+                <a href="#results" class="nav-item {% if active_tab == 'results' %}active{% endif %}" data-tab="results">
+                    <span class="nav-item-icon"><i data-lucide="bar-chart-3"></i></span>
+                    <span data-i18n="nav.results">结果分析</span>
+                </a>
+                <a href="#rag" class="nav-item {% if active_tab == 'rag' %}active{% endif %}" data-tab="rag">
+                    <span class="nav-item-icon"><i data-lucide="book-open"></i></span>
+                    <span data-i18n="nav.rag">知识库管理</span>
+                </a>
+                <a href="#chat" class="nav-item {% if active_tab == 'chat' %}active{% endif %}" data-tab="chat">
+                    <span class="nav-item-icon"><i data-lucide="message-square"></i></span>
+                    <span data-i18n="nav.chat">对话调试</span>
+                </a>
+                <a href="#settings" class="nav-item {% if active_tab == 'settings' %}active{% endif %}" data-tab="settings">
+                    <span class="nav-item-icon"><i data-lucide="settings"></i></span>
+                    <span data-i18n="nav.settings">设置</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-row" style="justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span class="status-dot" id="status-dot"></span>
+                        <span id="system-status" data-i18n="sidebar.status.checking">检查系统状态...</span>
+                    </div>
+                    <button id="lang-toggle" onclick="I18N.toggle()" style="background:var(--sidebar-hover);border:1px solid var(--sidebar-border);color:var(--sidebar-text-active);border-radius:4px;padding:2px 8px;font-size:0.68rem;font-weight:700;cursor:pointer;font-family:inherit;">EN</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Notifications Container -->
+            <div id="notifications"></div>
+            
+            {% block content %}
+            <!-- Page content goes here -->
+            {% endblock %}
+        </main>
+    </div>
+
+    <!-- Core Scripts -->
+    <script src="/static/js/api.js?v=20260311e"></script>
+    <script src="/static/js/upload.js?v=20260311e"></script>
+    <script src="/static/js/experiment.js?v=20260311e"></script>
+    <script src="/static/js/results.js?v=20260311e"></script>
+    
+    <!-- Tab Navigation & System Status -->
+    <script>
+        // Experiment sub-tab switching
+        function switchExpSubTab(panelId, btn) {
+            document.querySelectorAll('.exp-sub-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.exp-sub-tab-panel').forEach(p => p.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            var panel = document.getElementById(panelId);
+            if (panel) panel.classList.add('active');
+        }
+
+        // Tab switching functionality
+        function switchTab(tabName) {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.tab === tabName) {
+                    item.classList.add('active');
+                }
+            });
+            
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            const targetTab = document.getElementById(`tab-${tabName}`);
+            if (targetTab) {
+                targetTab.classList.add('active');
+            }
+            
+            window.location.hash = tabName;
+            
+            // Refresh results experiment dropdown when switching to results tab
+            if (tabName === 'results' && window.API) {
+                API.fetchExperiments({ status: 'finished' }).then(experiments => {
+                    const select = document.getElementById('results-experiment-select');
+                    if (select) {
+                        const current = select.value;
+                        select.innerHTML = `<option value="">${window.I18N ? I18N.t('results.select_exp') : '选择实验查看结果...'}</option>` +
+                            experiments.map(e => `<option value="${e.experiment_id}">${e.name} (${e.dataset_id})</option>`).join('');
+                        if (current) select.value = current;
+                    }
+                }).catch(err => console.warn('Failed to refresh results dropdown:', err));
+                // Also populate figure export experiment selector
+                if (typeof populateFigureExpSelect === 'function') populateFigureExpSelect();
+            }
+            
+            // Refresh experiment list when switching to experiments tab
+            if (tabName === 'experiments' && window.experimentManager) {
+                window.experimentManager.loadExperiments();
+            }
+        }
+        
+        // Initialize tab from URL hash
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Lucide icons
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+
+            // Apply i18n
+            if (window.I18N) {
+                I18N.applyAll();
+            }
+
+            const hash = window.location.hash.slice(1) || 'dashboard';
+            switchTab(hash);
+            
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    switchTab(item.dataset.tab);
+                });
+            });
+            
+            checkSystemStatus();
+        });
+        
+        // System status check
+        async function checkSystemStatus() {
+            const dot = document.getElementById('status-dot');
+            const statusEl = document.getElementById('system-status');
+            try {
+                const health = await API.System.health();
+                if (dot) {
+                    dot.className = 'status-dot ' + (health.status === 'healthy' ? 'green' : health.status === 'degraded' ? 'yellow' : 'red');
+                }
+                if (statusEl) {
+                    statusEl.textContent = `${health.status} | Milvus: ${health.milvus} | v${health.version}`;
+                }
+            } catch (error) {
+                if (dot) dot.className = 'status-dot red';
+                if (statusEl) statusEl.textContent = I18N ? I18N.t('sidebar.status.failed') : '连接失败';
+            }
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

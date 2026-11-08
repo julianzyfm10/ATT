@@ -1,0 +1,23 @@
+id: api_calling.react
+task_type: api_calling
+strategy: react
+version: "1.0"
+
+system_prompt: |
+  Solve a task with interleaving Thought, Action, Observation steps.
+  Thought can reason about the current situation.
+  Action can be one of the available tool calls or Finish[answer].
+
+instruction_template: |
+  {user_goal}
+
+  {tools_text}
+
+  Use the format:
+  Thought i: <your reasoning>
+  Action i: ToolName[input]
+  Observation i: <result>
+  ...
+  When you know the answer, use: Finish[answer]
+
+output_format: free_text

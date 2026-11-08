@@ -1,0 +1,109 @@
+id: image_mcq.tot
+task_type: image_mcq
+strategy: tot
+version: "1.0"
+
+system_prompt: |
+  You are a construction safety expert. Analyze images and identify safety hazards by systematically evaluating each option against relevant safety regulations.
+
+instruction_template: |
+  {question}
+
+  {options_text}
+
+  Analyze each option step by step based on the image, then provide your answer. End with: Answer: X
+
+output_format: choice_letter
+
+# ---------------------------------------------------------------------------
+# ToT BFS prompt templates
+# These are used by BenchmarkTask during tree search. Each template uses
+# few-shot examples from real construction safety inspection data.
+# ---------------------------------------------------------------------------
+
+# Generation: expand candidate reasoning at each BFS depth (CoT mode)
+# Teaches the model to analyze options one by one against safety regulations.
+generate_cot: |
+  You are solving a construction safety multiple-choice question step by step.
+  Carefully observe the image. Each step, analyze ONE option against relevant safety regulations.
+  If previous reasoning is provided, continue from where it left off — do NOT re-analyze options already covered.
+  Write only the NEXT step (1-3 sentences). Do NOT repeat or rephrase previous steps.
+
+  Example 1 (first step, no previous reasoning):
+  Question: 该施工现场存在的主要安全隐患是什么？
+  A. 未设置围挡  B. 未佩戴安全帽  C. 材料乱堆放  D. 电线裸露
+  Previous reasoning: (none yet — start from the first option)
+  Next step: Step 1: 检查选项A——观察图片中施工现场周围已设置围挡，排除A。
+
+  Example 2 (continuing from previous step):
+  Previous reasoning: Step 1: 检查选项A——已设置围挡，排除A。
+  Next step: Step 2: 检查选项B——观察图片中工人已佩戴安全帽，排除B。
+
+  Question:
+  {problem}
+
+  Previous reasoning:
+  {thoughts}
+
+  Next step:
+
+# Generation: standard mode (single concise step)
+generate_standard: |
+  Continue analyzing the following construction safety question based on the image.
+  Write only the NEXT step (1-2 sentences). Do NOT repeat previous steps.
+
+  Question:
+  {problem}
+
+  Previous reasoning:
+  {thoughts}
+
+  Next step:
+
+# Evaluation: score each candidate reasoning path (value mode, with few-shot)
+evaluate_value: |
+  Evaluate if the following safety hazard analysis is leading to the correct answer. Consider whether the reasoning correctly applies safety regulations to what is visible in the image. Rate as: sure/likely/impossible.
+
+  Example 1:
+  Question: 观察图片，该施工现场存在的主要安全隐患是什么？
+  A. 气瓶未设置防倾倒措施  B. 乙炔瓶未安装回火防止器  C. 气瓶存放区未配备灭火器  D. 气瓶与动火作业点距离不足
+  Reasoning: 根据GB50720-2011第6.3.3.1条，严禁使用回火防止器缺损的乙炔瓶。回火防止器是防止火焰回燃引发气瓶爆炸的关键安全装置。图片中乙炔瓶确实缺少回火防止器。
+  Evaluation: 推理正确引用了具体法规条款，且与图片观察一致。
+  sure
+
+  Example 2:
+  Question: 该施工现场生活区宿舍存在的主要安全隐患是什么？
+  A. 宿舍内私拉乱接电线并使用大功率电器  B. 安全疏散通道被杂物堵塞占用  C. 使用明火或违规存放易燃液体  D. 灭火器配置数量不足且未定期检查
+  Reasoning: 宿舍看起来有点乱，可能是疏散通道堵塞的问题。
+  Evaluation: 推理过于笼统，没有引用具体法规，也没有仔细观察图片中的电气线路情况。
+  likely
+
+  Example 3:
+  Question: 该施工现场存在的主要安全隐患是什么？
+  A. 气瓶间距不足且未固定  B. 气瓶压力表损坏  C. 气瓶未设置专用库房  D. 作业人员未佩戴护目镜
+  Reasoning: 图片中工人没有戴护目镜，这是最大的安全隐患。
+  Evaluation: 护目镜属于个人防护问题，而气瓶间距不足和未固定属于火灾爆炸风险，后者更为严重。推理方向错误。
+  impossible
+
+  Now evaluate:
+  Question: {problem}
+  Reasoning: {thoughts}
+  Evaluation:
+
+# Evaluation: vote for the most promising candidate (vote mode)
+evaluate_vote: |
+  Given a construction safety question and several candidate analyses, decide which analysis most accurately identifies the safety hazard. Consider regulation compliance, image observation accuracy, and hazard severity. Analyze each choice in detail, then conclude in the last line "The best choice is {{s}}", where s is the integer id of the choice.
+
+  Question: {problem}
+
+  {choices}
+
+# Final answer extraction after BFS completes
+extract_answer: |
+  {problem}
+
+  Based on the following safety analysis:
+  {best_candidate}
+
+  What is the correct answer? Respond with only the letter (A, B, C, or D).
+  Answer:

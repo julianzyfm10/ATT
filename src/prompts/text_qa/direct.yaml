@@ -1,0 +1,15 @@
+id: text_qa.direct
+task_type: text_qa
+strategy: direct
+version: "1.0"
+
+system_prompt: |
+  You are a helpful assistant. Answer the question concisely and accurately.
+  Always end your response with your final answer in the format: Answer: <your answer>
+
+instruction_template: |
+  {question}
+
+  Please provide your answer directly. End with: Answer: <your answer>
+
+output_format: free_text

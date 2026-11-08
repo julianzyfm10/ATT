@@ -1,0 +1,22 @@
+"""Run Experiment 1 on the original 100 ToolSandbox scenarios via SiliconFlow."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path[:0] = [str(ROOT), str(ROOT / "src"), str(ROOT / "scripts")]
+
+import run_experiment1_llm_deepseek as experiment
+from siliconflow_support import configure_legacy_runner, append_default_argument, default_full_suffix
+
+
+def main() -> None:
+    model = configure_legacy_runner(experiment)
+    append_default_argument("--output-suffix", default_full_suffix(model, "toolsandbox_original_100"))
+    experiment.main()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,98 @@
+id: text_qa.tot
+task_type: text_qa
+strategy: tot
+version: "1.0"
+
+system_prompt: |
+  You are a knowledgeable assistant. Break down complex questions into smaller reasoning steps and provide well-structured answers.
+
+instruction_template: |
+  {question}
+
+  Break this question down step by step, then provide your final answer. End with: Answer: <your answer>
+
+output_format: free_text
+
+# ---------------------------------------------------------------------------
+# ToT BFS prompt templates for open-ended question answering
+# Variables: generate_*/evaluate_value use {problem} {thoughts};
+#            evaluate_vote uses {problem} {choices};
+#            extract_answer uses {problem} {best_candidate}.
+# ---------------------------------------------------------------------------
+
+generate_cot: |
+  You are solving a question step by step.
+  Each step, address ONE aspect of the question that has not been covered yet.
+  If previous reasoning is provided, continue from where it left off — do NOT repeat what was already said.
+  Write only the NEXT step (1-3 sentences). Do NOT repeat or rephrase previous steps.
+
+  Example 1 (first step, no previous reasoning):
+  Question: Why do leaves change color in autumn?
+  Previous reasoning: (none yet — start with the first relevant aspect)
+  Next step: Step 1: During spring and summer, leaves produce chlorophyll which gives them green color.
+
+  Example 2 (continuing from previous step):
+  Previous reasoning: Step 1: During spring and summer, leaves produce chlorophyll which gives them green color.
+  Next step: Step 2: As days shorten in autumn, trees reduce chlorophyll production, and other pigments like carotenoids become visible.
+
+  Question:
+  {problem}
+
+  Previous reasoning:
+  {thoughts}
+
+  Next step:
+
+generate_standard: |
+  Continue reasoning about the following question.
+  Write only the NEXT step (1-2 sentences). Do NOT repeat previous steps.
+
+  Question:
+  {problem}
+
+  Previous reasoning:
+  {thoughts}
+
+  Next step:
+
+evaluate_value: |
+  Evaluate if the following reasoning about a question is correct and complete. Rate as: sure/likely/impossible.
+
+  Example 1:
+  Question: What is the boiling point of water at sea level?
+  Reasoning: Water boils at 100 degrees Celsius (212 degrees Fahrenheit) at standard atmospheric pressure at sea level. This is because at 100C the vapor pressure of water equals atmospheric pressure.
+  Evaluation: Factually correct and explains the underlying mechanism.
+  sure
+
+  Example 2:
+  Question: How does photosynthesis work?
+  Reasoning: Plants absorb sunlight through their roots and convert it to sugar.
+  Evaluation: Photosynthesis occurs in chloroplasts within leaves, not roots. The reasoning contains a fundamental factual error.
+  impossible
+
+  Example 3:
+  Question: Why is the sky blue?
+  Reasoning: It has something to do with how sunlight interacts with the atmosphere.
+  Evaluation: The direction is correct (Rayleigh scattering of shorter wavelengths) but far too vague to be a complete answer.
+  likely
+
+  Now evaluate:
+  Question: {problem}
+  Reasoning: {thoughts}
+  Evaluation:
+
+evaluate_vote: |
+  Given a question and several candidate reasoning paths, decide which reasoning is most accurate and complete. Analyze each choice in detail, then conclude in the last line "The best choice is {{s}}", where s is the integer id of the choice.
+
+  Question: {problem}
+
+  {choices}
+
+extract_answer: |
+  {problem}
+
+  Based on the following analysis:
+  {best_candidate}
+
+  Provide a clear and concise final answer.
+  Answer:

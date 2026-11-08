@@ -1,0 +1,2400 @@
+{% extends "base.html" %}
+
+{% block title %}AgentInferKit - Benchmark Platform{% endblock %}
+
+{% block content %}
+<!-- ================================================================
+     Dashboard Tab
+     ================================================================ -->
+<div id="tab-dashboard" class="tab-content active">
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1 class="page-title" data-i18n="dashboard.title">Dashboard</h1>
+            <span class="page-subtitle" id="dashboard-time"></span>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-secondary" onclick="refreshDashboard()">
+                <i data-lucide="refresh-cw"></i> <span data-i18n="dashboard.refresh">刷新</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon indigo"><i data-lucide="database"></i></div>
+            <div class="stat-info">
+                <div class="stat-label" data-i18n="dashboard.stat.datasets">数据集数量</div>
+                <div class="stat-value" id="stat-datasets">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i data-lucide="flask-conical"></i></div>
+            <div class="stat-info">
+                <div class="stat-label" data-i18n="dashboard.stat.experiments">实验数量</div>
+                <div class="stat-value" id="stat-experiments">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon amber"><i data-lucide="book-open"></i></div>
+            <div class="stat-info">
+                <div class="stat-label" data-i18n="dashboard.stat.kbs">知识库数量</div>
+                <div class="stat-value" id="stat-kbs">-</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon blue"><i data-lucide="cpu"></i></div>
+            <div class="stat-info">
+                <div class="stat-label" data-i18n="dashboard.stat.models">可用模型</div>
+                <div class="stat-value" id="stat-models">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <button class="quick-action-btn" onclick="switchTab('datasets')">
+            <i data-lucide="upload"></i> <span data-i18n="dashboard.quick.upload">上传数据集</span>
+        </button>
+        <button class="quick-action-btn" onclick="switchTab('experiments'); setTimeout(() => experimentManager && experimentManager.showCreateForm(), 100);">
+            <i data-lucide="plus"></i> <span data-i18n="dashboard.quick.new_exp">新建实验</span>
+        </button>
+        <button class="quick-action-btn" onclick="switchTab('results')">
+            <i data-lucide="bar-chart-3"></i> <span data-i18n="dashboard.quick.results">查看结果</span>
+        </button>
+        <button class="quick-action-btn" onclick="switchTab('chat')">
+            <i data-lucide="message-square"></i> <span data-i18n="dashboard.quick.chat">对话调试</span>
+        </button>
+    </div>
+
+    <!-- Recent Experiments -->
+    <div class="card">
+        <div class="card-header"><i data-lucide="clock"></i> <span data-i18n="dashboard.recent">最近实验</span></div>
+        <div class="card-body">
+            <div id="recent-experiments" class="table-container">
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i data-lucide="flask-conical"></i></div>
+                    <div class="empty-state-title" data-i18n="dashboard.no_exp">暂无实验</div>
+                    <div class="empty-state-description" data-i18n="dashboard.no_exp_desc">上传数据集并创建您的第一个评测实验</div>
+                    <button class="btn btn-primary" onclick="switchTab('experiments')">
+                        <i data-lucide="plus"></i> <span data-i18n="dashboard.create_exp">创建实验</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     Datasets Tab
+     ================================================================ -->
+<div id="tab-datasets" class="tab-content">
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1 class="page-title" data-i18n="datasets.title">数据集管理</h1>
+            <span class="page-subtitle" data-i18n="datasets.subtitle">上传 JSONL 数据集文件并管理评测数据</span>
+        </div>
+    </div>
+
+    <div class="card mb-lg">
+        <div class="card-header"><i data-lucide="upload"></i> <span data-i18n="datasets.upload">上传数据集</span></div>
+        <div class="card-body">
+            <div class="flex gap-md">
+                <div class="form-group flex-1">
+                    <label class="form-label" data-i18n="datasets.task_type">任务类型</label>
+                    <select id="task-type" class="form-select" onchange="updateTaskTypeHint(this.value)">
+                        <option value="qa" data-i18n="datasets.task_type.qa">问答 (QA)</option>
+                        <option value="text_exam" data-i18n="datasets.task_type.text_exam">文本选择题</option>
+                        <option value="image_mcq" data-i18n="datasets.task_type.image_mcq">图片选择题</option>
+                        <option value="api_calling" data-i18n="datasets.task_type.api_calling">API 调用</option>
+                    </select>
+                </div>
+                <div class="form-group flex-1">
+                    <label class="form-label" data-i18n="datasets.name">数据集名称</label>
+                    <input type="text" id="dataset-name" class="form-input" placeholder="留空则使用文件名" data-i18n-placeholder="datasets.name_placeholder">
+                </div>
+            </div>
+            <div id="task-type-hint" class="form-hint" style="margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border-radius:var(--border-radius-md);font-size:13px;line-height:1.6;"></div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="datasets.upload_file">上传文件</label>
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <div class="drop-zone-icon"><i data-lucide="upload-cloud"></i></div>
+                        <div class="drop-zone-text">
+                            <span data-i18n="datasets.drop_text">拖拽 JSONL 文件到此处，或</span> 
+                            <strong data-i18n="datasets.drop_click">点击选择文件</strong>
+                        </div>
+                    </div>
+                    <input type="file" id="file-input" accept=".jsonl,.json" style="display: none;">
+                </div>
+            </div>
+            <div id="upload-status" class="hidden"></div>
+            <button id="upload-btn" class="btn btn-primary">
+                <i data-lucide="upload"></i> <span data-i18n="datasets.upload_btn">上传</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><i data-lucide="list"></i> <span data-i18n="datasets.list">数据集列表</span></div>
+        <div class="card-body">
+            <div id="datasets-list" class="table-container">
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i data-lucide="database"></i></div>
+                    <div class="empty-state-title" data-i18n="datasets.no_data">暂无数据集</div>
+                    <div class="empty-state-description" data-i18n="datasets.no_data_desc">上传您的第一个 JSONL 数据集</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     Experiments Tab
+     ================================================================ -->
+<div id="tab-experiments" class="tab-content">
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1 class="page-title">实验配置</h1>
+            <span class="page-subtitle">创建推理任务与运行评估</span>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-primary" onclick="experimentManager && experimentManager.showCreateForm()">
+                <i data-lucide="plus" style="width:16px;height:16px;"></i> 新建推理任务
+            </button>
+        </div>
+    </div>
+
+    <!-- Sub-tabs: Inference / Evaluation -->
+    <div class="exp-sub-tabs mb-md">
+        <button class="exp-sub-tab-btn active" data-panel="exp-infer-panel" onclick="switchExpSubTab('exp-infer-panel', this)">
+            <i data-lucide="play" style="width:15px;height:15px;"></i> 推理任务
+        </button>
+        <button class="exp-sub-tab-btn" data-panel="exp-eval-panel" onclick="switchExpSubTab('exp-eval-panel', this); experimentManager && experimentManager.loadEvalExperiments()">
+            <i data-lucide="bar-chart-2" style="width:15px;height:15px;"></i> 评估任务
+        </button>
+    </div>
+
+    <!-- ======== Sub-Tab 1: Inference ======== -->
+    <div id="exp-infer-panel" class="exp-sub-tab-panel active">
+        <div id="experiment-progress" class="hidden mb-lg"></div>
+
+        <!-- Create Form (hidden) - 7-section single-page scroll layout -->
+        <div id="create-experiment-form" class="card mb-lg hidden">
+            <div class="card-header"><i data-lucide="settings" style="width:16px;height:16px;"></i> 创建推理任务</div>
+            <div class="card-body" id="experiment-form">
+
+                <!-- Section 1: Basic Info -->
+                <div class="form-section-title"><i data-lucide="file-text" style="width:16px;height:16px;"></i> 基本信息</div>
+                <div class="form-group">
+                    <label class="form-label">实验名称 *</label>
+                    <input type="text" name="name" id="exp-name-input" class="form-input" placeholder="推荐格式: 数据集_模型_策略，例如 demo_exam_cot_oracle">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">描述</label>
+                    <textarea name="description" class="form-textarea" placeholder="实验描述（可选）" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">选择数据集 *</label>
+                    <div id="step1-datasets"></div>
+                    <select name="dataset_id" style="display:none;"></select>
+                </div>
+                <div class="flex gap-md">
+                    <div class="form-group">
+                        <label class="form-label">数据分割</label>
+                        <select name="split" class="form-select"><option value="test">test</option><option value="dev">dev</option><option value="train">train</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">最大样本数</label>
+                        <input type="number" name="max_samples" class="form-input" placeholder="全部（留空）">
+                    </div>
+                </div>
+                <div id="task-type-badge" class="mb-md" style="display:none;"></div>
+
+                <!-- Section 2: Model & API Credentials -->
+                <div class="form-section-title" style="margin-top:24px;"><i data-lucide="cpu" style="width:16px;height:16px;"></i> 模型与 API 凭证</div>
+                <div class="flex gap-md" style="flex-wrap:wrap;">
+                    <div class="form-group flex-1" style="min-width:180px;">
+                        <label class="form-label">Provider *</label>
+                        <select name="provider" class="form-select" id="exp-provider-select" onchange="experimentManager && experimentManager.onProviderChange(this.value)">
+                            <option value="">选择 Provider...</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="qwen">通义千问</option>
+                            <option value="ollama">Ollama (本地)</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex-1" style="min-width:200px;">
+                        <label class="form-label">模型 *</label>
+                        <select name="model_id" class="form-select" id="exp-model-select">
+                            <option value="">先选择 Provider...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex gap-md" style="flex-wrap:wrap;" id="api-credential-row">
+                    <div class="form-group flex-1" style="min-width:260px;" id="api-key-group">
+                        <label class="form-label">API Key</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="password" name="api_key" class="form-input" id="exp-api-key" placeholder="sk-... (不保存到服务器，仅本次会话使用)" style="flex:1;">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="const i=document.getElementById('exp-api-key');i.type=i.type==='password'?'text':'password'" title="显示/隐藏">
+                                <i data-lucide="eye" style="width:14px;height:14px;"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group flex-1" style="min-width:200px;">
+                        <label class="form-label">Base URL</label>
+                        <input type="text" name="base_url" class="form-input" id="exp-base-url" placeholder="留空使用默认">
+                    </div>
+                    <div class="form-group" style="align-self:flex-end;">
+                        <button type="button" class="btn btn-secondary" onclick="experimentManager && experimentManager.testConnection()" id="exp-ping-btn">
+                            <i data-lucide="wifi" style="width:14px;height:14px;"></i> 连接测试
+                        </button>
+                    </div>
+                </div>
+                <div id="ping-result" style="display:none;" class="mb-sm"></div>
+                <div id="vlm-warning" style="display:none;" class="alert alert-warning mb-sm">
+                    <i data-lucide="alert-triangle" style="width:16px;height:16px;"></i>
+                    图像任务需要支持多模态的模型（VLM）。当前选择的模型可能不支持图像输入，请选择支持视觉的模型（如 gpt-4o）。
+                </div>
+
+                <!-- Section 3: Inference Strategy -->
+                <div class="form-section-title" style="margin-top:24px;"><i data-lucide="route" style="width:16px;height:16px;"></i> 推理策略</div>
+                <div class="strategy-grid" id="strategy-grid">
+                    <div class="strategy-card selected" data-strategy="direct" onclick="selectStrategy(this)">
+                        <div class="strategy-card-icon"><i data-lucide="zap" style="width:20px;height:20px;"></i></div>
+                        <div class="strategy-card-title">Direct</div>
+                        <div class="strategy-card-desc">直接生成，速度最快</div>
+                    </div>
+                    <div class="strategy-card" data-strategy="cot" onclick="selectStrategy(this)">
+                        <div class="strategy-card-icon"><i data-lucide="git-branch" style="width:20px;height:20px;"></i></div>
+                        <div class="strategy-card-title">CoT</div>
+                        <div class="strategy-card-desc">链式思考，逐步推理</div>
+                    </div>
+                    <div class="strategy-card" data-strategy="long_cot" onclick="selectStrategy(this)">
+                        <div class="strategy-card-icon"><i data-lucide="list-tree" style="width:20px;height:20px;"></i></div>
+                        <div class="strategy-card-title">Long CoT</div>
+                        <div class="strategy-card-desc">深度分解，适合复杂问题</div>
+                    </div>
+                    <div class="strategy-card" data-strategy="tot" onclick="selectStrategy(this)">
+                        <div class="strategy-card-icon"><i data-lucide="network" style="width:20px;height:20px;"></i></div>
+                        <div class="strategy-card-title">ToT</div>
+                        <div class="strategy-card-desc">树状搜索，多路径探索</div>
+                    </div>
+                    <div class="strategy-card" data-strategy="self_refine" onclick="selectStrategy(this)">
+                        <div class="strategy-card-icon"><i data-lucide="pencil-line" style="width:20px;height:20px;"></i></div>
+                        <div class="strategy-card-title">Self-Refine</div>
+                        <div class="strategy-card-desc">自我修正，迭代优化</div>
+                    </div>
+                    <div class="strategy-card" data-strategy="self_consistency" onclick="selectStrategy(this)">
+                        <div class="strategy-card-icon"><i data-lucide="vote" style="width:20px;height:20px;"></i></div>
+                        <div class="strategy-card-title">Self-Consistency</div>
+                        <div class="strategy-card-desc">多路投票，取众数答案</div>
+                    </div>
+                    <div class="strategy-card" data-strategy="react" id="strategy-react-card" style="display:none;" onclick="selectStrategy(this)">
+                        <div class="strategy-card-icon"><i data-lucide="repeat" style="width:20px;height:20px;"></i></div>
+                        <div class="strategy-card-title">ReAct</div>
+                        <div class="strategy-card-desc">推理+行动循环</div>
+                    </div>
+                </div>
+                <select name="strategy" class="form-select" id="strategy-hidden-select" style="display:none;">
+                    <option value="direct" selected>Direct</option><option value="cot">CoT</option><option value="long_cot">Long CoT</option><option value="tot">ToT</option><option value="self_refine">Self-Refine</option><option value="self_consistency">Self-Consistency</option><option value="react">ReAct</option>
+                </select>
+
+                <!-- Strategy-specific parameters -->
+                <div id="strategy-params-container" style="margin-top:16px;display:none;">
+                    <!-- ToT Parameters -->
+                    <div id="strategy-params-tot" class="strategy-params" style="display:none;">
+                        <div class="form-hint" style="margin-bottom:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;">
+                            <strong>Tree-of-Thought</strong>: 树状搜索，每步生成多个候选，评估后保留最优路径
+                        </div>
+                        <!-- Common ToT params -->
+                        <div class="flex gap-md" style="flex-wrap:wrap;">
+                            <div class="form-group" style="min-width:130px;">
+                                <label class="form-label">搜索方法</label>
+                                <select name="tot_method" class="form-select" onchange="toggleToTMethodParams(this.value)">
+                                    <option value="bfs" selected>BFS (广度优先)</option>
+                                    <option value="dfs">DFS (深度优先)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="min-width:100px;">
+                                <label class="form-label">搜索深度</label>
+                                <input type="number" name="tot_depth" class="form-input" value="3" min="1" max="10" title="搜索的最大深度/步数">
+                            </div>
+                            <div class="form-group" style="min-width:100px;">
+                                <label class="form-label">生成候选数 (k)</label>
+                                <input type="number" name="tot_k" class="form-input" value="3" min="1" max="10" title="每步生成的候选数量">
+                            </div>
+                            <div class="form-group" style="min-width:100px;">
+                                <label class="form-label">评估采样数</label>
+                                <input type="number" name="tot_n_evaluate" class="form-input" value="3" min="1" max="10" title="评估时的采样次数">
+                            </div>
+                        </div>
+                        <!-- BFS-specific params -->
+                        <div id="tot-bfs-params" class="flex gap-md" style="flex-wrap:wrap;margin-top:8px;">
+                            <div class="form-group" style="min-width:100px;">
+                                <label class="form-label">保留候选数</label>
+                                <input type="number" name="tot_n_select" class="form-input" value="2" min="1" max="5" title="BFS: 每层保留的最佳候选数">
+                            </div>
+                            <div class="form-group" style="min-width:120px;">
+                                <label class="form-label">选择方法</label>
+                                <select name="tot_method_select" class="form-select">
+                                    <option value="greedy" selected>Greedy (贪心)</option>
+                                    <option value="sample">Sample (采样)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- DFS-specific params -->
+                        <div id="tot-dfs-params" class="flex gap-md" style="flex-wrap:wrap;margin-top:8px;display:none;">
+                            <div class="form-group" style="min-width:120px;">
+                                <label class="form-label">最大节点数</label>
+                                <input type="number" name="tot_max_dfs_nodes" class="form-input" value="20" min="5" max="100" title="DFS: 最大探索节点数">
+                            </div>
+                        </div>
+                        <!-- Advanced params (collapsed) -->
+                        <details style="margin-top:8px;">
+                            <summary style="cursor:pointer;font-size:12px;color:var(--text-muted);">高级参数</summary>
+                            <div class="flex gap-md" style="flex-wrap:wrap;margin-top:8px;">
+                                <div class="form-group" style="min-width:120px;">
+                                    <label class="form-label">生成方法</label>
+                                    <select name="tot_method_generate" class="form-select">
+                                        <option value="sample" selected>Sample</option>
+                                        <option value="propose">Propose</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="min-width:120px;">
+                                    <label class="form-label">评估方法</label>
+                                    <select name="tot_method_evaluate" class="form-select">
+                                        <option value="value" selected>Value (打分)</option>
+                                        <option value="vote">Vote (投票)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="min-width:120px;">
+                                    <label class="form-label">提示类型</label>
+                                    <select name="tot_prompt_sample" class="form-select">
+                                        <option value="cot" selected>CoT</option>
+                                        <option value="standard">Standard</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <!-- Self-Consistency Parameters -->
+                    <div id="strategy-params-self_consistency" class="strategy-params" style="display:none;">
+                        <div class="form-hint" style="margin-bottom:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;">
+                            <strong>Self-Consistency</strong>: 多次采样 CoT 路径，通过多数投票选择最终答案
+                        </div>
+                        <div class="flex gap-md" style="flex-wrap:wrap;">
+                            <div class="form-group" style="min-width:120px;">
+                                <label class="form-label">采样路径数</label>
+                                <input type="number" name="sc_num_samples" class="form-input" value="5" min="3" max="20" title="采样的推理路径数量">
+                            </div>
+                            <div class="form-group" style="min-width:120px;">
+                                <label class="form-label">采样温度</label>
+                                <input type="number" name="sc_temperature" class="form-input" value="0.7" min="0.1" max="1.5" step="0.1" title="温度越高，采样越多样">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Self-Refine Parameters -->
+                    <div id="strategy-params-self_refine" class="strategy-params" style="display:none;">
+                        <div class="form-hint" style="margin-bottom:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;">
+                            <strong>Self-Refine</strong>: 生成 → 批评 → 改进的迭代循环
+                        </div>
+                        <div class="flex gap-md" style="flex-wrap:wrap;">
+                            <div class="form-group" style="min-width:120px;">
+                                <label class="form-label">最大迭代轮数</label>
+                                <input type="number" name="refine_max_rounds" class="form-input" value="3" min="1" max="10" title="最多进行几轮改进">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ReAct Parameters -->
+                    <div id="strategy-params-react" class="strategy-params" style="display:none;">
+                        <div class="form-hint" style="margin-bottom:12px;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;">
+                            <strong>ReAct</strong>: 推理 + 行动循环，适用于需要工具调用的任务
+                        </div>
+                        <div class="flex gap-md" style="flex-wrap:wrap;">
+                            <div class="form-group" style="min-width:120px;">
+                                <label class="form-label">最大步数</label>
+                                <input type="number" name="react_max_steps" class="form-input" value="10" min="1" max="30" title="最多执行的推理-行动步数">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: RAG Config (shown only for text_exam / qa) -->
+                <div id="section-rag" style="display:none;">
+                    <div class="form-section-title" style="margin-top:24px;">
+                        <i data-lucide="book-open" style="width:16px;height:16px;"></i> RAG 配置
+                        <label class="toggle-switch" style="margin-left:12px;">
+                            <input type="checkbox" id="rag-toggle" onchange="experimentManager && experimentManager.onRagToggle(this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div id="rag-config-body" style="display:none;">
+                        <div class="rag-mode-grid">
+                            <label class="rag-mode-card selected" onclick="experimentManager && experimentManager.selectRAGMode('closed', this)">
+                                <input type="radio" name="rag_mode" value="closed" checked>
+                                <div class="rag-mode-icon">❌</div>
+                                <div class="rag-mode-title">Closed-book</div>
+                                <div class="rag-mode-desc">不使用外部知识，直接作答（基线）</div>
+                            </label>
+                            <label class="rag-mode-card" onclick="experimentManager && experimentManager.selectRAGMode('oracle', this)">
+                                <input type="radio" name="rag_mode" value="oracle">
+                                <div class="rag-mode-icon">✅</div>
+                                <div class="rag-mode-title">Oracle RAG</div>
+                                <div class="rag-mode-desc">使用标注的正确知识块（性能上界）</div>
+                            </label>
+                            <label class="rag-mode-card" onclick="experimentManager && experimentManager.selectRAGMode('retrieved', this)">
+                                <input type="radio" name="rag_mode" value="retrieved">
+                                <div class="rag-mode-icon">🔍</div>
+                                <div class="rag-mode-title">Retrieved RAG</div>
+                                <div class="rag-mode-desc">从向量知识库自动检索（真实场景）</div>
+                            </label>
+                        </div>
+                        <div id="rag-oracle-options" style="display:none;margin-top:12px;">
+                            <div class="form-group">
+                                <label class="form-label">知识块来源文件</label>
+                                <select name="oracle_chunks_file" class="form-select" id="rag-oracle-file-select">
+                                    <option value="">选择含 chunk 的 JSONL 文件...</option>
+                                </select>
+                                <div class="form-hint">数据集目录中含有 chunk_id 字段的 .jsonl 文件</div>
+                            </div>
+                        </div>
+                        <div id="rag-retrieved-options" style="display:none;margin-top:12px;">
+                            <div class="flex gap-md">
+                                <div class="form-group flex-1">
+                                    <label class="form-label">知识库</label>
+                                    <select name="kb_name" class="form-select" id="rag-kb-select">
+                                        <option value="">选择知识库...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Top-K 召回数</label>
+                                    <input type="number" name="top_k" class="form-input" value="3" min="1" max="20" style="width:80px;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">最低分数阈值</label>
+                                    <input type="number" name="score_threshold" class="form-input" value="0" min="0" max="1" step="0.05" style="width:100px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 5: Tool Config (shown only for api_calling) -->
+                <div id="section-tools" style="display:none;">
+                    <div class="form-section-title" style="margin-top:24px;"><i data-lucide="wrench" style="width:16px;height:16px;"></i> 工具配置</div>
+                    <div class="form-group">
+                        <label class="form-label">可用工具</label>
+                        <div class="metrics-checkbox-group" id="tool-checkboxes">
+                            <span class="text-muted">加载工具列表中...</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-md" style="flex-wrap:wrap;">
+                        <div class="form-group">
+                            <label class="form-label">执行模式</label>
+                            <div style="display:flex;gap:16px;align-items:center;">
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                    <input type="radio" name="tool_exec_mode" value="mock" checked> Mock (模拟返回)
+                                </label>
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                                    <input type="radio" name="tool_exec_mode" value="real"> 真实调用
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max 调用步数</label>
+                            <input type="number" name="max_tool_steps" class="form-input" value="10" min="1" max="50" style="width:80px;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 6: Run Parameters -->
+                <div class="form-section-title" style="margin-top:24px;"><i data-lucide="sliders" style="width:16px;height:16px;"></i> 运行参数</div>
+                <div class="flex gap-md" style="flex-wrap:wrap;">
+                    <div class="form-group" style="min-width:120px;">
+                        <label class="form-label">并发数</label>
+                        <input type="number" name="concurrency" class="form-input" value="5" min="1" max="50">
+                    </div>
+                    <div class="form-group" style="min-width:120px;">
+                        <label class="form-label">重试次数</label>
+                        <input type="number" name="retry_times" class="form-input" value="3" min="0" max="10">
+                    </div>
+                    <div class="form-group" style="min-width:120px;">
+                        <label class="form-label">随机种子</label>
+                        <input type="number" name="seed" class="form-input" placeholder="留空不固定">
+                    </div>
+                    <div class="form-group" style="min-width:120px;">
+                        <label class="form-label">断点续跑</label>
+                        <label class="toggle-switch" style="margin-top:6px;">
+                            <input type="checkbox" name="resume" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('advanced-params').style.display=document.getElementById('advanced-params').style.display==='none'?'block':'none'">
+                        ▼ 展开高级参数
+                    </button>
+                </div>
+                <div id="advanced-params" style="display:none;">
+                    <div class="flex gap-md" style="flex-wrap:wrap;">
+                        <div class="form-group" style="min-width:140px;">
+                            <label class="form-label">请求超时 (秒)</label>
+                            <input type="number" name="request_timeout_s" class="form-input" value="60" min="5" max="300">
+                        </div>
+                        <div class="form-group" style="min-width:140px;">
+                            <label class="form-label">Temperature</label>
+                            <input type="number" name="temperature" class="form-input" value="0.0" min="0" max="2" step="0.1">
+                        </div>
+                        <div class="form-group" style="min-width:140px;">
+                            <label class="form-label">Max Tokens</label>
+                            <input type="number" name="max_tokens" class="form-input" value="2048" min="64" max="32768">
+                        </div>
+                        <div class="form-group" style="min-width:140px;">
+                            <label class="form-label">Batch Size</label>
+                            <input type="number" name="batch_size" class="form-input" value="10" min="1" max="100">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 7: Evaluation Metrics (auto-fill by task_type) -->
+                <div class="form-section-title" style="margin-top:24px;"><i data-lucide="check-square" style="width:16px;height:16px;"></i> 评估指标</div>
+                <div class="form-group">
+                    <label class="form-label">性能指标</label>
+                    <div class="metrics-checkbox-group" id="infer-perf-metrics"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">效率指标</label>
+                    <div class="metrics-checkbox-group" id="infer-eff-metrics"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">可选指标</label>
+                    <div class="metrics-checkbox-group" id="infer-opt-metrics"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">分组统计维度</label>
+                    <div class="metrics-checkbox-group" id="infer-group-dims"></div>
+                </div>
+
+            </div>
+            <div class="card-footer flex justify-between">
+                <button class="btn btn-secondary" onclick="experimentManager && experimentManager.hideCreateForm()">
+                    <i data-lucide="x" style="width:14px;height:14px;"></i> 取消
+                </button>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn btn-secondary" onclick="experimentManager && experimentManager.submitForm()">
+                        <i data-lucide="save" style="width:14px;height:14px;"></i> 保存配置
+                    </button>
+                    <button class="btn btn-primary" onclick="experimentManager && experimentManager.submitAndRun()">
+                        <i data-lucide="play" style="width:14px;height:14px;"></i> 开始推理
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Experiment List -->
+        <div class="card">
+            <div class="card-header"><i data-lucide="list" style="width:16px;height:16px;"></i> 实验列表</div>
+            <div class="card-body">
+                <div id="experiment-list" class="table-container">
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i data-lucide="flask-conical"></i></div>
+                        <div class="empty-state-title">暂无实验</div>
+                        <div class="empty-state-description">点击上方按钮创建第一个推理任务</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======== Sub-Tab 2: Evaluation ======== -->
+    <div id="exp-eval-panel" class="exp-sub-tab-panel">
+        <div class="card">
+            <div class="card-header"><i data-lucide="bar-chart-2" style="width:16px;height:16px;"></i> 对已有推理结果运行评估</div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label">选择已完成的推理任务 *</label>
+                    <select class="form-select" id="eval-experiment-select" onchange="experimentManager && experimentManager.onEvalExperimentChange(this.value)">
+                        <option value="">选择已完成的推理任务...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">评估指标（根据 task_type 自动预填，可调整）</label>
+                    <div id="eval-metrics-checkboxes" class="metrics-checkbox-group"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">分组统计维度（可多选）</label>
+                    <div id="eval-groups-checkboxes" class="metrics-checkbox-group"></div>
+                </div>
+            </div>
+            <div class="card-footer" style="text-align:right;">
+                <button class="btn btn-primary" onclick="experimentManager && experimentManager.submitEvaluation()">
+                    <i data-lucide="play" style="width:14px;height:14px;"></i> 运行评估
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     Results Tab
+     ================================================================ -->
+<div id="tab-results" class="tab-content">
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1 class="page-title" data-i18n="results.title">结果分析</h1>
+            <span class="page-subtitle" data-i18n="results.subtitle">查看实验评测指标与可视化图表</span>
+        </div>
+        <div class="page-header-right">
+            <button class="btn btn-secondary" onclick="if(resultsVisualizer) resultsVisualizer.enterCompareMode()">
+                <i data-lucide="git-compare" style="width:16px;height:16px;"></i> 对比模式
+            </button>
+            <div style="display:inline-flex;align-items:center;gap:4px;">
+                <select id="export-format" class="form-select" style="width:auto;padding:6px 10px;font-size:13px;margin-bottom:0;">
+                    <option value="csv">CSV (Excel)</option>
+                    <option value="json" selected>JSON (完整)</option>
+                    <option value="jsonl">JSONL (逐行)</option>
+                    <option value="latex">LaTeX (论文表格)</option>
+                </select>
+                <button class="btn btn-secondary" onclick="exportResults()">
+                    <i data-lucide="download" style="width:16px;height:16px;"></i> 导出
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Experiment selector -->
+    <div class="card mb-lg">
+        <div class="card-body" style="padding: var(--spacing-md) var(--spacing-lg);">
+            <div class="flex items-center gap-md">
+                <i data-lucide="search" style="width:18px;height:18px;color:var(--text-muted);flex-shrink:0;"></i>
+                <select id="results-experiment-select" class="form-select" onchange="loadSelectedResults()" style="margin-bottom:0;">
+                    <option value="" data-i18n="results.select_exp">选择实验查看结果...</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Region A: Experiment Meta Info -->
+    <div id="results-meta" class="mb-md"></div>
+
+    <!-- Region B: Performance Metric Cards (task-type specific) -->
+    <div id="results-perf-cards" class="mb-md"></div>
+
+    <!-- Region C: Efficiency Metric Cards (universal) -->
+    <div id="results-eff-cards" class="mb-lg"></div>
+
+    <!-- Region D: Charts (dimension-separated) -->
+    <div id="results-charts" class="mb-lg"></div>
+
+    <!-- Region E: Group Statistics Tabs -->
+    <div id="results-groups" class="mb-lg"></div>
+
+    <!-- Region F: Sample Browser (collapsible) -->
+    <div id="results-samples" class="mb-lg"></div>
+
+    <!-- Compare Mode Container (hidden by default) -->
+    <div id="results-compare" style="display:none;" class="mb-lg"></div>
+
+    <!-- Paper Figure Export Panel -->
+    <div class="card mb-lg">
+        <div class="card-header"><i data-lucide="bar-chart-3"></i> 论文出图面板</div>
+        <div class="card-body">
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:var(--spacing-md);">
+                选择多个已完成实验，在线生成对比图表并下载 PNG。
+            </p>
+            <div class="flex gap-md" style="margin-bottom:var(--spacing-md);flex-wrap:wrap;">
+                <div class="form-group" style="flex:2;margin-bottom:0;">
+                    <select id="figure-exp-select" class="form-select" multiple style="height:100px;">
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">图表类型</label>
+                    <select id="figure-chart-type" class="form-select">
+                        <option value="accuracy_bar">准确率对比柱状图</option>
+                        <option value="token_vs_accuracy">Token-Accuracy 散点图</option>
+                        <option value="by_difficulty">按难度分组柱状图</option>
+                        <option value="radar">多维雷达图</option>
+                    </select>
+                </div>
+                <div style="display:flex;align-items:flex-end;">
+                    <button class="btn btn-primary" onclick="generatePaperFigure()">
+                        <i data-lucide="image"></i> 生成图表
+                    </button>
+                </div>
+            </div>
+            <div id="figure-canvas-wrap" style="text-align:center;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     RAG Tab
+     ================================================================ -->
+<div id="tab-rag" class="tab-content">
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1 class="page-title" data-i18n="rag.title">知识库管理</h1>
+            <span class="page-subtitle" data-i18n="rag.subtitle">构建和管理 RAG 检索知识库</span>
+        </div>
+    </div>
+
+    <div class="card mb-lg">
+        <div class="card-header"><i data-lucide="hammer"></i> <span data-i18n="rag.build">构建知识库</span></div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label" data-i18n="rag.kb_name">知识库名称</label>
+                <input type="text" id="kb-name" class="form-input" placeholder="例如: medical_kb" data-i18n-placeholder="rag.kb_name_placeholder">
+            </div>
+            <div class="flex gap-md">
+                <div class="form-group flex-1">
+                    <label class="form-label" data-i18n="rag.chunk_strategy">分块策略</label>
+                    <select id="chunk-strategy" class="form-select">
+                        <option value="by_topic" data-i18n="rag.chunk_strategy.topic">按主题</option>
+                        <option value="by_sentence" data-i18n="rag.chunk_strategy.sentence">按句子</option>
+                        <option value="by_token" data-i18n="rag.chunk_strategy.token">按 Token</option>
+                        <option value="by_paragraph" data-i18n="rag.chunk_strategy.paragraph">按段落</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-i18n="rag.chunk_size">分块大小</label>
+                    <input type="number" id="chunk-size" class="form-input" value="256" min="64" max="2048">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">重叠大小 (Overlap)</label>
+                    <input type="number" id="chunk-overlap" class="form-input" value="0" min="0" max="512">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Embedding 模型</label>
+                <input type="text" id="rag-embedder" class="form-input" value="BAAI/bge-m3" placeholder="BAAI/bge-m3">
+            </div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="rag.upload_doc">上传文档 (JSONL)</label>
+                <input type="file" id="rag-file-input" class="form-input" accept=".jsonl,.json">
+            </div>
+            <div id="rag-build-progress" class="hidden mb-md"></div>
+            <button class="btn btn-primary" onclick="buildKnowledgeBase()">
+                <i data-lucide="hammer"></i> <span data-i18n="rag.build_btn">构建</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card mb-lg">
+        <div class="card-header"><i data-lucide="library"></i> <span data-i18n="rag.list">知识库列表</span></div>
+        <div class="card-body">
+            <div id="kb-list" class="table-container">
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i data-lucide="book-open"></i></div>
+                    <div class="empty-state-title" data-i18n="rag.no_kb">暂无知识库</div>
+                    <div class="empty-state-description" data-i18n="rag.no_kb_desc">上传文档并构建您的第一个知识库</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Evidence Search & Visualization -->
+    <div class="card mb-lg">
+        <div class="card-header"><i data-lucide="search"></i> 证据检索与可视化</div>
+        <div class="card-body">
+            <div class="flex gap-md" style="margin-bottom:var(--spacing-md);">
+                <div class="form-group flex-1" style="margin-bottom:0;">
+                    <select id="rag-search-kb" class="form-select">
+                        <option value="">选择知识库...</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex:2;margin-bottom:0;">
+                    <input type="text" id="rag-search-query" class="form-input" placeholder="输入检索查询...">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <input type="number" id="rag-search-topk" class="form-input" value="5" min="1" max="50" style="width:70px;" title="Top-K">
+                </div>
+                <button class="btn btn-primary" onclick="searchRAGEvidence()">
+                    <i data-lucide="search"></i> 检索
+                </button>
+                <button class="btn btn-secondary" onclick="exportKBChunks()">
+                    <i data-lucide="download"></i> 导出全部
+                </button>
+            </div>
+            <div id="rag-search-results"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     Chat Tab
+     ================================================================ -->
+<div id="tab-chat" class="tab-content">
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1 class="page-title" data-i18n="chat.title">对话调试</h1>
+            <span class="page-subtitle" data-i18n="chat.subtitle">与模型实时对话测试推理效果</span>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-secondary" onclick="clearChatHistory()">
+                <i data-lucide="trash-2" style="width:14px;height:14px;"></i> 清空对话
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body" style="padding: 0;">
+            <div style="padding: var(--spacing-md) var(--spacing-lg); border-bottom: 1px solid var(--border-light);">
+                <div class="flex gap-md" style="margin-bottom:12px;">
+                    <div class="form-group flex-1" style="margin-bottom:0;">
+                        <label class="form-label" data-i18n="chat.model">模型</label>
+                        <select id="chat-model" class="form-select">
+                            <option value="deepseek-chat">DeepSeek Chat</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex-1" style="margin-bottom:0;">
+                        <label class="form-label" data-i18n="chat.strategy">策略</label>
+                        <select id="chat-strategy" class="form-select">
+                            <option value="direct">Direct</option>
+                            <option value="cot">Chain-of-Thought</option>
+                            <option value="long_cot">Long CoT</option>
+                            <option value="tot">Tree-of-Thought</option>
+                            <option value="self_refine">Self-Refine</option>
+                            <option value="self_consistency">Self-Consistency</option>
+                            <option value="react">ReAct</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- System Prompt 输入框 -->
+                <div class="form-group" style="margin-bottom:0;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <label class="form-label" style="margin-bottom:0;">System Prompt</label>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleSystemPrompt()" style="padding:2px 8px;font-size:11px;">
+                            <i data-lucide="chevron-down" id="system-prompt-toggle-icon" style="width:12px;height:12px;"></i>
+                            <span id="system-prompt-toggle-text">展开</span>
+                        </button>
+                    </div>
+                    <div id="system-prompt-container" style="display:none;">
+                        <textarea id="chat-system-prompt" class="form-textarea" rows="4" placeholder="自定义 System Prompt（留空使用默认）" style="font-family:monospace;font-size:13px;resize:vertical;">You are a helpful assistant.</textarea>
+                        <div class="form-hint" style="margin-top:4px;">自定义系统提示词，用于调试不同 prompt 效果。修改后立即生效。</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages">
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i data-lucide="message-square"></i></div>
+                        <div class="empty-state-title" data-i18n="chat.start">开始对话</div>
+                        <div class="empty-state-description" data-i18n="chat.start_desc">在下方输入消息开始调试模型</div>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <textarea id="chat-input" placeholder="输入消息... (Ctrl+Enter 发送)" data-i18n-placeholder="chat.input_placeholder" onkeydown="if(event.ctrlKey && event.key==='Enter'){sendChatMessage();event.preventDefault();}"></textarea>
+                    <button class="btn btn-primary send-btn" onclick="sendChatMessage()">
+                        <i data-lucide="send"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================================================================
+     Settings Tab
+     ================================================================ -->
+<div id="tab-settings" class="tab-content">
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1 class="page-title">设置</h1>
+            <span class="page-subtitle">管理 API 密钥和模型配置参数</span>
+        </div>
+    </div>
+
+    <!-- Section 1: API Keys -->
+    <div class="card mb-lg">
+        <div class="card-header"><i data-lucide="key" style="width:16px;height:16px;"></i> API 密钥配置</div>
+        <div class="card-body">
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:var(--spacing-md);">
+                配置各模型提供商的 API 密钥和 Base URL。修改后即时生效，无需重启服务。
+            </p>
+            <div id="env-vars-container">
+                <div style="color:var(--text-muted);padding:20px;text-align:center;">加载中...</div>
+            </div>
+            <div style="margin-top:var(--spacing-md);text-align:right;">
+                <button class="btn btn-primary" onclick="saveEnvVars()">
+                    <i data-lucide="save" style="width:14px;height:14px;"></i> 保存密钥
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Model Configs -->
+    <div class="card mb-lg">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <span><i data-lucide="cpu" style="width:16px;height:16px;"></i> 模型配置</span>
+            <button class="btn btn-secondary btn-sm" onclick="refreshModelConfigs()">
+                <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i> 刷新
+            </button>
+        </div>
+        <div class="card-body">
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:var(--spacing-md);">
+                编辑各模型的推理参数。每个 Provider 对应一个 YAML 配置文件。
+            </p>
+            <div id="model-configs-container">
+                <div style="color:var(--text-muted);padding:20px;text-align:center;">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3: Prompt Templates -->
+    <div class="card mb-lg">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <span><i data-lucide="file-text" style="width:16px;height:16px;"></i> 提示词模板</span>
+            <button class="btn btn-secondary btn-sm" onclick="refreshPromptsList()">
+                <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i> 刷新
+            </button>
+        </div>
+        <div class="card-body">
+            <p style="color:var(--text-secondary);font-size:13px;margin-bottom:var(--spacing-md);">
+                编辑各任务类型和推理策略的提示词模板。支持变量占位符如 <code>{question}</code>、<code>{options_text}</code> 等。
+            </p>
+            <div class="flex gap-md" style="margin-bottom:var(--spacing-md);">
+                <div class="form-group" style="min-width:160px;margin-bottom:0;">
+                    <label class="form-label">任务类型</label>
+                    <select id="prompt-task-type" class="form-select" onchange="onPromptFilterChange()">
+                        <option value="">全部</option>
+                        <option value="text_exam">text_exam</option>
+                        <option value="text_qa">text_qa</option>
+                        <option value="image_mcq">image_mcq</option>
+                        <option value="api_calling">api_calling</option>
+                    </select>
+                </div>
+                <div class="form-group" style="min-width:160px;margin-bottom:0;">
+                    <label class="form-label">策略</label>
+                    <select id="prompt-strategy" class="form-select" onchange="onPromptFilterChange()">
+                        <option value="">全部</option>
+                        <option value="direct">direct</option>
+                        <option value="cot">cot</option>
+                        <option value="long_cot">long_cot</option>
+                        <option value="tot">tot</option>
+                        <option value="react">react</option>
+                        <option value="self_refine">self_refine</option>
+                        <option value="self_consistency">self_consistency</option>
+                    </select>
+                </div>
+            </div>
+            <div id="prompts-list-container">
+                <div style="color:var(--text-muted);padding:20px;text-align:center;">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prompt Editor Modal -->
+    <div id="prompt-editor-modal" class="modal" style="display:none;">
+        <div class="modal-overlay" onclick="closePromptEditor()"></div>
+        <div class="modal-content" style="max-width:900px;width:90%;max-height:90vh;display:flex;flex-direction:column;">
+            <div class="modal-header">
+                <h3 id="prompt-editor-title">编辑提示词模板</h3>
+                <button class="modal-close" onclick="closePromptEditor()">&times;</button>
+            </div>
+            <div class="modal-body" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+                <div style="margin-bottom:12px;display:flex;gap:12px;align-items:center;">
+                    <span id="prompt-editor-path" style="font-family:monospace;font-size:12px;color:var(--text-muted);"></span>
+                    <span id="prompt-editor-vars" style="font-size:12px;color:var(--text-secondary);"></span>
+                </div>
+                <textarea id="prompt-editor-content" style="flex:1;width:100%;font-family:monospace;font-size:13px;line-height:1.5;padding:12px;border:1px solid var(--border-color);border-radius:var(--border-radius-md);background:var(--bg-secondary);color:var(--text-primary);resize:none;"></textarea>
+                <div id="prompt-editor-error" style="display:none;margin-top:8px;padding:8px 12px;background:var(--error-bg);color:var(--error-color);border-radius:var(--border-radius-sm);font-size:13px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closePromptEditor()">取消</button>
+                <button class="btn btn-secondary" onclick="validatePromptContent()">
+                    <i data-lucide="check-circle" style="width:14px;height:14px;"></i> 验证语法
+                </button>
+                <button class="btn btn-primary" onclick="savePromptContent()">
+                    <i data-lucide="save" style="width:14px;height:14px;"></i> 保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4: Add New Model -->
+    <div class="card">
+        <div class="card-header"><i data-lucide="plus-circle" style="width:16px;height:16px;"></i> 添加新模型配置</div>
+        <div class="card-body">
+            <div class="flex gap-md" style="flex-wrap:wrap;">
+                <div class="form-group flex-1" style="min-width:180px;">
+                    <label class="form-label">Provider</label>
+                    <select id="new-model-provider" class="form-select">
+                        <option value="">选择 Provider...</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
+                        <option value="qwen">Qwen (DashScope)</option>
+                        <option value="ollama">Ollama (本地)</option>
+                        <option value="huggingface">HuggingFace</option>
+                    </select>
+                </div>
+                <div class="form-group flex-1" style="min-width:200px;">
+                    <label class="form-label">Model ID</label>
+                    <input type="text" id="new-model-id" class="form-input" placeholder="例如: gpt-4o-mini">
+                </div>
+                <div class="form-group flex-1" style="min-width:250px;">
+                    <label class="form-label">Base URL</label>
+                    <input type="text" id="new-model-baseurl" class="form-input" placeholder="例如: https://api.openai.com/v1">
+                </div>
+            </div>
+            <div style="text-align:right;">
+                <button class="btn btn-primary" onclick="addNewModelConfig()">
+                    <i data-lucide="plus" style="width:14px;height:14px;"></i> 创建配置
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Task type hint for dataset upload
+    const TASK_TYPE_HINTS = {
+        qa: {
+            required: ['question', 'answer', 'eval_type'],
+            optional: ['difficulty', 'topic', 'explanation', 'context'],
+            autofill: ['sample_id', 'task_type', 'split', 'source', 'modality', 'version', 'difficulty'],
+            desc: '开放式问答任务，模型需生成文本答案',
+            example: '{"question":"什么是RAG？", "answer":"检索增强生成", "eval_type":"em_or_f1", "difficulty":"easy"}'
+        },
+        text_exam: {
+            required: ['question', 'options', 'answer', 'eval_type'],
+            optional: ['difficulty', 'topic', 'explanation'],
+            autofill: ['sample_id', 'task_type', 'split', 'source', 'modality', 'version', 'difficulty'],
+            desc: '文本选择题，模型需从选项中选择正确答案（A/B/C/D）',
+            example: '{"question":"1+1=?", "options":{"A":"1","B":"2","C":"3","D":"4"}, "answer":"B", "eval_type":"choice_accuracy"}'
+        },
+        image_mcq: {
+            required: ['image_path', 'question', 'options', 'answer'],
+            optional: ['difficulty', 'topic'],
+            autofill: ['sample_id', 'task_type', 'split', 'source', 'modality', 'version', 'difficulty'],
+            desc: '图片选择题，需要支持多模态的模型（VLM），数据集须包含图片路径',
+            example: '{"image_path":"images/001.png", "question":"图中是什么？", "options":{"A":"猫","B":"狗"}, "answer":"A"}'
+        },
+        api_calling: {
+            required: ['user_goal', 'available_tools', 'ground_truth'],
+            optional: ['difficulty', 'category'],
+            autofill: ['sample_id', 'task_type', 'split', 'source', 'modality', 'version', 'difficulty'],
+            desc: 'API/工具调用任务，模型需要选择正确的工具并填入参数',
+            example: '{"user_goal":"查询北京天气", "available_tools":["get_weather"], "ground_truth":[{"tool_id":"get_weather","parameters":{"city":"北京"}}]}'
+        }
+    };
+
+    function updateTaskTypeHint(taskType) {
+        const hint = TASK_TYPE_HINTS[taskType];
+        const el = document.getElementById('task-type-hint');
+        if (!el || !hint) return;
+        el.innerHTML = `
+            <div style="margin-bottom:6px;"><strong>${hint.desc}</strong></div>
+            <div style="color:var(--text-secondary);">
+                <span style="color:var(--error-color);font-weight:600;">必填：</span>${hint.required.map(f => '<code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;font-size:12px;">' + f + '</code>').join(' ')}
+                &nbsp;&nbsp;
+                <span style="color:var(--text-muted);font-weight:500;">可选：</span>${hint.optional.map(f => '<code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;font-size:12px;">' + f + '</code>').join(' ')}
+            </div>
+            <div style="margin-top:6px;font-family:monospace;font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${hint.example.replace(/"/g, '&quot;')}">示例: ${hint.example}</div>
+            <div style="margin-top:4px;font-size:11px;color:var(--text-muted);">💡 <code>sample_id</code>、<code>split</code>、<code>difficulty</code>、<code>version</code> 等基础字段缺失时会自动补全</div>
+        `;
+    }
+
+    // Strategy card selection
+    function selectStrategy(card) {
+        document.querySelectorAll('.strategy-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        const val = card.dataset.strategy;
+        document.getElementById('strategy-hidden-select').value = val;
+        
+        // Show/hide strategy-specific parameters
+        const paramsContainer = document.getElementById('strategy-params-container');
+        const strategiesWithParams = ['tot', 'self_consistency', 'self_refine', 'react'];
+        
+        if (strategiesWithParams.includes(val)) {
+            paramsContainer.style.display = 'block';
+            // Hide all strategy params, then show the selected one
+            document.querySelectorAll('.strategy-params').forEach(el => el.style.display = 'none');
+            const targetParams = document.getElementById('strategy-params-' + val);
+            if (targetParams) targetParams.style.display = 'block';
+        } else {
+            paramsContainer.style.display = 'none';
+        }
+    }
+
+    // Toggle ToT BFS/DFS specific parameters
+    function toggleToTMethodParams(method) {
+        const bfsParams = document.getElementById('tot-bfs-params');
+        const dfsParams = document.getElementById('tot-dfs-params');
+        if (method === 'bfs') {
+            bfsParams.style.display = 'flex';
+            dfsParams.style.display = 'none';
+        } else {
+            bfsParams.style.display = 'none';
+            dfsParams.style.display = 'flex';
+        }
+    }
+
+    // Dashboard functions
+    async function refreshDashboard() {
+        const prefix = (window.I18N ? I18N.t('dashboard.updated_at') : '更新于');
+        document.getElementById('dashboard-time').textContent =
+            prefix + ' ' + new Date().toLocaleString(I18N && I18N.currentLang === 'en' ? 'en-US' : 'zh-CN');
+        try {
+            const config = await API.System.config();
+            document.getElementById('stat-datasets').textContent = config.dataset_count || 0;
+            document.getElementById('stat-kbs').textContent = config.kb_count || 0;
+            document.getElementById('stat-models').textContent = config.models?.length || 0;
+
+            const experiments = await API.fetchExperiments();
+            document.getElementById('stat-experiments').textContent = experiments.length;
+            updateRecentExperiments(experiments.slice(0, 5));
+        } catch (error) {
+            console.error('Dashboard refresh failed:', error);
+        }
+        
+        // Re-init Lucide icons after DOM update
+        if (window.lucide) lucide.createIcons();
+    }
+
+    function updateRecentExperiments(experiments) {
+        const container = document.getElementById('recent-experiments');
+        if (experiments.length === 0) return;
+
+        container.innerHTML = `
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>${I18N ? I18N.t('dashboard.table.name') : '名称'}</th>
+                        <th>${I18N ? I18N.t('dashboard.table.status') : '状态'}</th>
+                        <th>${I18N ? I18N.t('dashboard.table.progress') : '进度'}</th>
+                        <th>${I18N ? I18N.t('dashboard.table.created') : '创建时间'}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${experiments.map(exp => {
+                        const pct = exp.total_samples ? Math.round(exp.completed / exp.total_samples * 100) : 0;
+                        const isRunning = exp.status === 'running';
+                        return `
+                        <tr>
+                            <td style="font-weight:600;">${exp.name}</td>
+                            <td><span class="badge badge-${exp.status === 'finished' ? 'success' : exp.status === 'running' ? 'info' : 'neutral'}">${exp.status}</span></td>
+                            <td>
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <div class="progress-bar" style="width:80px;">
+                                        <div class="progress-fill ${isRunning ? 'running' : ''}" style="width:${pct}%"></div>
+                                    </div>
+                                    <span style="font-size:0.8rem;color:var(--text-secondary);">${exp.completed}/${exp.total_samples}</span>
+                                </div>
+                            </td>
+                            <td style="color:var(--text-muted);font-size:0.8rem;">${new Date(exp.created_at).toLocaleString(I18N && I18N.currentLang === 'en' ? 'en-US' : 'zh-CN')}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    // Dataset list functions
+    async function refreshDatasetsList() {
+        const container = document.getElementById('datasets-list');
+        if (!container) {
+            console.warn('datasets-list container not found');
+            return;
+        }
+        
+        console.log('Refreshing datasets list...');
+        try {
+            const response = await API.Datasets.list();
+            console.log('API response:', response);
+            const datasets = response.datasets || [];
+            
+            if (datasets.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i data-lucide="database"></i></div>
+                        <div class="empty-state-title" data-i18n="datasets.no_data">暂无数据集</div>
+                        <div class="empty-state-description" data-i18n="datasets.no_data_desc">上传您的第一个 JSONL 数据集</div>
+                    </div>
+                `;
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
+            
+            container.innerHTML = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>数据集 ID</th>
+                            <th>任务类型</th>
+                            <th>样本数</th>
+                            <th>版本</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${datasets.map(ds => `
+                            <tr>
+                                <td style="font-weight:600;">${ds.dataset_id}</td>
+                                <td><span class="badge badge-info">${ds.task_type}</span></td>
+                                <td>${ds.total_samples}</td>
+                                <td>${ds.version || 'v1'}</td>
+                                <td style="font-size:0.8rem;color:var(--text-muted);">${new Date(ds.created_at).toLocaleString(I18N && I18N.currentLang === 'en' ? 'en-US' : 'zh-CN')}</td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding:6px 12px;font-size:0.8rem;" onclick="viewDataset('${ds.dataset_id}')">
+                                        <i data-lucide="eye" style="width:14px;height:14px;"></i> 查看
+                                    </button>
+                                    <button class="btn btn-danger" style="padding:6px 12px;font-size:0.8rem;" onclick="deleteDataset('${ds.dataset_id}')">
+                                        <i data-lucide="trash-2" style="width:14px;height:14px;"></i> 删除
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            if (window.lucide) lucide.createIcons();
+        } catch (error) {
+            console.error('Failed to load datasets:', error);
+            container.innerHTML = `
+                <div class="alert alert-error">
+                    加载数据集列表失败: ${error.message}
+                </div>
+            `;
+        }
+    }
+    
+    async function viewDataset(datasetId) {
+        try {
+            const preview = await API.Datasets.preview(datasetId, 0, 10);
+            console.log('Dataset preview:', preview);
+            
+            // Show in a modal-like overlay
+            const samples = preview.samples || [];
+            const html = samples.map((s, i) => 
+                `<div style="margin-bottom:12px;padding:10px;background:var(--bg-secondary);border-radius:6px;font-size:13px;">
+                    <div style="font-weight:600;margin-bottom:4px;color:var(--text-secondary);">#${i + 1}</div>
+                    <pre style="white-space:pre-wrap;word-break:break-all;margin:0;font-size:12px;">${JSON.stringify(s, null, 2)}</pre>
+                </div>`
+            ).join('');
+            
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            overlay.innerHTML = `
+                <div style="background:var(--bg-primary);border-radius:12px;width:700px;max-height:80vh;display:flex;flex-direction:column;box-shadow:var(--shadow-xl);">
+                    <div style="padding:16px 20px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+                        <div style="font-weight:600;font-size:16px;">数据集预览: ${datasetId}</div>
+                        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-muted);">✕</button>
+                    </div>
+                    <div style="padding:20px;overflow-y:auto;flex:1;">
+                        <div style="margin-bottom:8px;color:var(--text-secondary);font-size:13px;">共 ${preview.total || samples.length} 条样本，显示前 ${samples.length} 条</div>
+                        ${samples.length > 0 ? html : '<div style="color:var(--text-muted);">暂无数据</div>'}
+                    </div>
+                </div>
+            `;
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+            document.body.appendChild(overlay);
+        } catch (error) {
+            alert(`查看失败: ${error.message}`);
+        }
+    }
+    
+    async function deleteDataset(datasetId) {
+        if (!confirm(`确定要删除数据集 ${datasetId} 吗？此操作不可恢复。`)) {
+            return;
+        }
+        
+        try {
+            await API.Datasets.delete(datasetId);
+            await refreshDatasetsList();
+            await refreshDashboard();
+        } catch (error) {
+            alert(`删除失败: ${error.message}`);
+        }
+    }
+
+    // Experiment form functions (delegated to experimentManager)
+    function showCreateExperimentForm() {
+        if (experimentManager) experimentManager.showCreateForm();
+    }
+
+    function hideCreateExperimentForm() {
+        if (experimentManager) experimentManager.hideCreateForm();
+    }
+
+    // Export results
+    function exportResults() {
+        if (!resultsVisualizer || !resultsVisualizer.currentExperimentId) {
+            alert('请先选择一个实验');
+            return;
+        }
+        const fmt = document.getElementById('export-format')?.value || 'json';
+        const url = API.Results.getExportUrl(resultsVisualizer.currentExperimentId, fmt, 'all');
+        window.open(url, '_blank');
+    }
+
+    // Results functions
+    async function loadSelectedResults() {
+        try {
+            const select = document.getElementById('results-experiment-select');
+            const experimentId = select.value;
+            if (!experimentId) return;
+            if (!window.resultsVisualizer) {
+                initResultsVisualizer();
+            }
+            await window.resultsVisualizer.loadMetrics(experimentId);
+        } catch (error) {
+            console.error('loadSelectedResults failed:', error);
+            const meta = document.getElementById('results-meta');
+            if (meta) meta.innerHTML = '<div class="alert alert-error">加载结果失败: ' + error.message + '</div>';
+        }
+    }
+
+    // Paper Figure Panel functions
+    async function populateFigureExpSelect() {
+        const sel = document.getElementById('figure-exp-select');
+        if (!sel) return;
+        try {
+            const experiments = await API.fetchExperiments({ status: 'finished' });
+            sel.innerHTML = '';
+            (experiments || []).forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e.experiment_id;
+                opt.textContent = `${e.name || e.experiment_id} (${e.strategy || '?'})`;
+                sel.appendChild(opt);
+            });
+        } catch (err) { console.error('populateFigureExpSelect:', err); }
+    }
+
+    async function generatePaperFigure() {
+        const sel = document.getElementById('figure-exp-select');
+        const chartType = document.getElementById('figure-chart-type')?.value || 'accuracy_bar';
+        const wrap = document.getElementById('figure-canvas-wrap');
+        if (!sel || !wrap) return;
+
+        const ids = Array.from(sel.selectedOptions).map(o => o.value);
+        if (ids.length < 1) { alert('请至少选择 1 个实验'); return; }
+
+        wrap.innerHTML = '<div style="padding:20px;color:var(--text-secondary);">加载数据中...</div>';
+
+        try {
+            const allMetrics = [];
+            for (const eid of ids) {
+                const m = await API.Results.getMetrics(eid);
+                allMetrics.push(m);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 800; canvas.height = 500;
+            canvas.style.maxWidth = '100%';
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 800, 500);
+
+            if (chartType === 'accuracy_bar') {
+                drawBarChart(ctx, allMetrics, 800, 500);
+            } else if (chartType === 'token_vs_accuracy') {
+                drawScatterChart(ctx, allMetrics, 800, 500);
+            } else if (chartType === 'by_difficulty') {
+                drawDifficultyChart(ctx, allMetrics, 800, 500);
+            } else if (chartType === 'radar') {
+                drawRadarChart(ctx, allMetrics, 800, 500);
+            }
+
+            wrap.innerHTML = '';
+            wrap.appendChild(canvas);
+
+            const dlBtn = document.createElement('button');
+            dlBtn.className = 'btn btn-secondary';
+            dlBtn.style.marginTop = '12px';
+            dlBtn.innerHTML = '<i data-lucide="download"></i> 下载 PNG';
+            dlBtn.onclick = () => {
+                const a = document.createElement('a');
+                a.download = `figure_${chartType}.png`;
+                a.href = canvas.toDataURL('image/png');
+                a.click();
+            };
+            wrap.appendChild(dlBtn);
+            if (window.lucide) lucide.createIcons();
+        } catch (err) {
+            wrap.innerHTML = `<div style="color:var(--danger);">生成失败: ${err.message}</div>`;
+        }
+    }
+
+    function _getColors() {
+        return ['#4C72B0','#DD8452','#55A868','#C44E52','#8172B2','#937860','#DA8BC3','#8C8C8C'];
+    }
+
+    function _getLabel(m) {
+        return `${m.strategy || '?'} (${(m.model || '?').split('/').pop()})`;
+    }
+
+    function _getAcc(m) {
+        const o = m.overall || {};
+        return o.accuracy || o.choice_accuracy || o.exact_match || o.avg_f1 || 0;
+    }
+
+    function drawBarChart(ctx, metrics, w, h) {
+        const colors = _getColors();
+        const pad = { t: 50, b: 80, l: 60, r: 30 };
+        const cw = w - pad.l - pad.r;
+        const ch = h - pad.t - pad.b;
+
+        ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#333';
+        ctx.textAlign = 'center'; ctx.fillText('Accuracy Comparison', w / 2, 30);
+
+        const n = metrics.length;
+        const barW = Math.min(cw / n * 0.6, 80);
+        const gap = cw / n;
+
+        for (let i = 0; i < n; i++) {
+            const acc = _getAcc(metrics[i]);
+            const barH = acc * ch;
+            const x = pad.l + gap * i + (gap - barW) / 2;
+            const y = pad.t + ch - barH;
+
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.fillRect(x, y, barW, barH);
+
+            ctx.fillStyle = '#333'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText((acc * 100).toFixed(1) + '%', x + barW / 2, y - 6);
+
+            ctx.save(); ctx.translate(x + barW / 2, pad.t + ch + 10);
+            ctx.rotate(Math.PI / 6); ctx.textAlign = 'left'; ctx.font = '11px sans-serif';
+            ctx.fillText(_getLabel(metrics[i]).substring(0, 20), 0, 0);
+            ctx.restore();
+        }
+
+        // Y axis
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+        for (let v = 0; v <= 1; v += 0.25) {
+            const y = pad.t + ch - v * ch;
+            ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
+            ctx.fillStyle = '#999'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+            ctx.fillText((v * 100).toFixed(0) + '%', pad.l - 6, y + 4);
+        }
+    }
+
+    function drawScatterChart(ctx, metrics, w, h) {
+        const colors = _getColors();
+        const pad = { t: 50, b: 50, l: 70, r: 30 };
+        const cw = w - pad.l - pad.r;
+        const ch = h - pad.t - pad.b;
+
+        ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#333';
+        ctx.textAlign = 'center'; ctx.fillText('Token Cost vs Accuracy', w / 2, 30);
+
+        const points = metrics.map(m => ({
+            x: (m.overall || {}).avg_tokens || 0,
+            y: _getAcc(m),
+            label: _getLabel(m),
+        }));
+        const maxX = Math.max(...points.map(p => p.x), 1) * 1.1;
+
+        for (let i = 0; i < points.length; i++) {
+            const px = pad.l + (points[i].x / maxX) * cw;
+            const py = pad.t + ch - points[i].y * ch;
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#333'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(points[i].label.substring(0, 18), px + 12, py + 4);
+        }
+
+        ctx.fillStyle = '#999'; ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center'; ctx.fillText('Avg Tokens', w / 2, h - 10);
+        ctx.save(); ctx.translate(15, h / 2); ctx.rotate(-Math.PI / 2);
+        ctx.fillText('Accuracy', 0, 0); ctx.restore();
+    }
+
+    function drawDifficultyChart(ctx, metrics, w, h) {
+        const colors = _getColors();
+        const diffs = ['easy', 'medium', 'hard'];
+        const pad = { t: 50, b: 60, l: 60, r: 30 };
+        const cw = w - pad.l - pad.r;
+        const ch = h - pad.t - pad.b;
+
+        ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#333';
+        ctx.textAlign = 'center'; ctx.fillText('Accuracy by Difficulty', w / 2, 30);
+
+        const groupW = cw / diffs.length;
+        const n = metrics.length;
+        const barW = Math.min(groupW / (n + 1), 40);
+
+        for (let d = 0; d < diffs.length; d++) {
+            for (let i = 0; i < n; i++) {
+                const diffData = (metrics[i].by_difficulty || {})[diffs[d]] || {};
+                const acc = diffData.accuracy || 0;
+                const barH = acc * ch;
+                const x = pad.l + groupW * d + (groupW - n * barW) / 2 + i * barW;
+                const y = pad.t + ch - barH;
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fillRect(x, y, barW - 2, barH);
+            }
+            ctx.fillStyle = '#333'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(diffs[d], pad.l + groupW * d + groupW / 2, pad.t + ch + 20);
+        }
+
+        // Legend
+        for (let i = 0; i < n; i++) {
+            const lx = pad.l + i * 140;
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.fillRect(lx, h - 30, 12, 12);
+            ctx.fillStyle = '#333'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(_getLabel(metrics[i]).substring(0, 16), lx + 16, h - 20);
+        }
+    }
+
+    function drawRadarChart(ctx, metrics, w, h) {
+        const colors = _getColors();
+        const cx = w / 2, cy = h / 2 + 10, r = Math.min(w, h) / 2 - 60;
+        const dims = ['accuracy', 'avg_latency_ms', 'avg_tokens', 'total_cost_usd'];
+        const dimLabels = ['Accuracy', 'Latency(inv)', 'Tokens(inv)', 'Cost(inv)'];
+        const n = dims.length;
+
+        ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#333';
+        ctx.textAlign = 'center'; ctx.fillText('Multi-Dimension Radar', w / 2, 25);
+
+        // Draw grid
+        for (let ring = 1; ring <= 4; ring++) {
+            const rr = r * ring / 4;
+            ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let i = 0; i <= n; i++) {
+                const angle = (Math.PI * 2 / n) * i - Math.PI / 2;
+                const px = cx + rr * Math.cos(angle);
+                const py = cy + rr * Math.sin(angle);
+                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+        }
+
+        // Axis labels
+        for (let i = 0; i < n; i++) {
+            const angle = (Math.PI * 2 / n) * i - Math.PI / 2;
+            const lx = cx + (r + 20) * Math.cos(angle);
+            const ly = cy + (r + 20) * Math.sin(angle);
+            ctx.fillStyle = '#666'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(dimLabels[i], lx, ly + 4);
+        }
+
+        // Normalize and draw polygons
+        for (let mi = 0; mi < metrics.length; mi++) {
+            const o = metrics[mi].overall || {};
+            const vals = dims.map((d, idx) => {
+                if (idx === 0) return _getAcc(metrics[mi]); // accuracy: 0-1
+                // Invert efficiency (lower is better) to 0-1 scale
+                const raw = o[d] || 0;
+                if (d === 'avg_latency_ms') return raw > 0 ? Math.min(1, 5000 / raw) : 0;
+                if (d === 'avg_tokens') return raw > 0 ? Math.min(1, 2000 / raw) : 0;
+                if (d === 'total_cost_usd') return raw > 0 ? Math.min(1, 1 / raw) : 0;
+                return 0;
+            });
+
+            ctx.strokeStyle = colors[mi % colors.length]; ctx.lineWidth = 2;
+            ctx.fillStyle = colors[mi % colors.length] + '30';
+            ctx.beginPath();
+            for (let i = 0; i <= n; i++) {
+                const angle = (Math.PI * 2 / n) * (i % n) - Math.PI / 2;
+                const px = cx + r * vals[i % n] * Math.cos(angle);
+                const py = cy + r * vals[i % n] * Math.sin(angle);
+                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.fill(); ctx.stroke();
+        }
+
+        // Legend
+        for (let i = 0; i < metrics.length; i++) {
+            ctx.fillStyle = colors[i % colors.length];
+            ctx.fillRect(20, h - 30 - i * 18, 12, 12);
+            ctx.fillStyle = '#333'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(_getLabel(metrics[i]).substring(0, 25), 36, h - 20 - i * 18);
+        }
+    }
+
+    // Chat functions
+    function toggleSystemPrompt() {
+        const container = document.getElementById('system-prompt-container');
+        const icon = document.getElementById('system-prompt-toggle-icon');
+        const text = document.getElementById('system-prompt-toggle-text');
+        if (container.style.display === 'none') {
+            container.style.display = 'block';
+            text.textContent = '收起';
+            icon.setAttribute('data-lucide', 'chevron-up');
+        } else {
+            container.style.display = 'none';
+            text.textContent = '展开';
+            icon.setAttribute('data-lucide', 'chevron-down');
+        }
+        if (window.lucide) lucide.createIcons();
+    }
+
+    function clearChatHistory() {
+        const messagesContainer = document.getElementById('chat-messages');
+        messagesContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon"><i data-lucide="message-square"></i></div>
+                <div class="empty-state-title" data-i18n="chat.start">开始对话</div>
+                <div class="empty-state-description" data-i18n="chat.start_desc">在下方输入消息开始调试模型</div>
+            </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+    }
+
+    async function sendChatMessage() {
+        const input = document.getElementById('chat-input');
+        const message = input.value.trim();
+        if (!message) return;
+
+        const messagesContainer = document.getElementById('chat-messages');
+
+        // Clear empty state
+        if (messagesContainer.querySelector('.empty-state')) {
+            messagesContainer.innerHTML = '';
+        }
+
+        // User message with avatar
+        messagesContainer.innerHTML += `
+            <div class="chat-message user">
+                <div class="chat-bubble">${message}</div>
+                <div class="chat-avatar user-avatar">U</div>
+            </div>
+        `;
+        input.value = '';
+
+        // Assistant placeholder with avatar
+        const assistantId = 'assistant-' + Date.now();
+        messagesContainer.innerHTML += `
+            <div id="${assistantId}" class="chat-message assistant">
+                <div class="chat-avatar ai-avatar">AI</div>
+                <div class="chat-bubble"><span class="typing">${I18N ? I18N.t('chat.thinking') : '思考中'}</span></div>
+            </div>
+        `;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        const modelId = document.getElementById('chat-model').value;
+        const strategy = document.getElementById('chat-strategy').value;
+        const systemPrompt = document.getElementById('chat-system-prompt')?.value?.trim() || '';
+        let fullResponse = '';
+
+        // Build messages array with optional system prompt
+        const messages = [];
+        if (systemPrompt) {
+            messages.push({ role: 'system', content: systemPrompt });
+        }
+        messages.push({ role: 'user', content: message });
+
+        await API.Chat.stream({
+            model_id: modelId,
+            strategy: strategy,
+            messages: messages,
+            system_prompt: systemPrompt || undefined,
+        }, {
+            onContent: (data) => {
+                fullResponse += data.content;
+                const el = document.getElementById(assistantId);
+                if (el) {
+                    el.querySelector('.chat-bubble').innerHTML = fullResponse.replace(/\n/g, '<br>');
+                }
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            },
+            onDone: (data) => {
+                console.log('Chat done:', data);
+                const el = document.getElementById(assistantId);
+                if (el && data.reasoning_trace) {
+                    const trace = typeof data.reasoning_trace === 'string'
+                        ? data.reasoning_trace
+                        : JSON.stringify(data.reasoning_trace, null, 2);
+                    const traceHtml = `
+                        <div class="reasoning-trace-block" style="margin-top:8px;border-top:1px solid var(--border-color);padding-top:8px;">
+                            <div style="cursor:pointer;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:4px;"
+                                 onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('.arrow').textContent = this.nextElementSibling.style.display === 'none' ? '▶' : '▼';">
+                                <span class="arrow">▶</span> 思维链 / Reasoning Trace
+                            </div>
+                            <pre style="display:none;margin-top:6px;padding:8px;background:var(--bg-secondary);border-radius:6px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;color:var(--text-secondary);">${trace.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+                        </div>`;
+                    el.querySelector('.chat-bubble').insertAdjacentHTML('beforeend', traceHtml);
+                }
+                if (el && data.usage) {
+                    const usageHtml = `<div style="margin-top:4px;font-size:11px;color:var(--text-muted);">Tokens: ${data.usage.total_tokens || '?'} | Latency: ${data.usage.latency_ms || '?'}ms</div>`;
+                    el.querySelector('.chat-bubble').insertAdjacentHTML('beforeend', usageHtml);
+                }
+            },
+            onError: (error) => {
+                const el = document.getElementById(assistantId);
+                if (el) {
+                    el.querySelector('.chat-bubble').innerHTML = `<span class="text-error">错误: ${error.message || error}</span>`;
+                }
+            }
+        });
+    }
+
+    // =========================================================================
+    // RAG Knowledge Base functions
+    // =========================================================================
+    async function buildKnowledgeBase() {
+        const kbName = document.getElementById('kb-name')?.value?.trim();
+        const fileInput = document.getElementById('rag-file-input');
+        const chunkStrategy = document.getElementById('chunk-strategy')?.value || 'by_topic';
+        const chunkSize = document.getElementById('chunk-size')?.value || 256;
+        const chunkOverlap = document.getElementById('chunk-overlap')?.value || 0;
+        const embedder = document.getElementById('rag-embedder')?.value?.trim() || 'BAAI/bge-m3';
+        const progressEl = document.getElementById('rag-build-progress');
+
+        if (!kbName) { alert('请输入知识库名称'); return; }
+        if (!fileInput?.files?.length) { alert('请选择 JSONL 文档文件'); return; }
+
+        const file = fileInput.files[0];
+        if (!file.name.endsWith('.jsonl') && !file.name.endsWith('.json')) {
+            alert('请上传 JSONL 格式的文件');
+            return;
+        }
+
+        // Show progress
+        if (progressEl) {
+            progressEl.classList.remove('hidden');
+            progressEl.innerHTML = `
+                <div class="alert alert-info">
+                    <i data-lucide="loader" style="width:14px;height:14px;animation:spin 1s linear infinite;"></i>
+                    正在构建知识库 <strong>${kbName}</strong> ...
+                    <div id="rag-build-stage" style="margin-top:4px;font-size:12px;color:var(--text-muted);"></div>
+                </div>`;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        try {
+            await API.RAG.build(file, {
+                kb_name: kbName,
+                chunk_strategy: chunkStrategy,
+                chunk_size: chunkSize,
+                chunk_overlap: chunkOverlap,
+                embedder: embedder,
+            }, {
+                onProgress(data) {
+                    const stageEl = document.getElementById('rag-build-stage');
+                    if (stageEl) {
+                        const pct = data.total ? Math.round(data.progress / data.total * 100) : 0;
+                        stageEl.textContent = `阶段: ${data.stage} — ${data.progress}/${data.total} (${pct}%)`;
+                    }
+                },
+                onDone(data) {
+                    if (progressEl) {
+                        progressEl.innerHTML = `
+                            <div class="alert alert-success">
+                                <i data-lucide="check-circle" style="width:14px;height:14px;"></i>
+                                知识库 <strong>${data.kb_name}</strong> 构建完成！共 ${data.total_chunks} 个分块。
+                            </div>`;
+                        if (window.lucide) lucide.createIcons();
+                    }
+                    // Reset form
+                    document.getElementById('kb-name').value = '';
+                    fileInput.value = '';
+                    refreshKBList();
+                },
+                onError(data) {
+                    if (progressEl) {
+                        progressEl.innerHTML = `
+                            <div class="alert alert-error">
+                                构建失败: ${data.message || '未知错误'}
+                            </div>`;
+                    }
+                },
+            });
+        } catch (error) {
+            if (progressEl) {
+                progressEl.innerHTML = `
+                    <div class="alert alert-error">
+                        构建失败: ${error.message || '未知错误'}
+                    </div>`;
+            }
+        }
+    }
+
+    async function refreshKBList() {
+        const container = document.getElementById('kb-list');
+        if (!container) return;
+        try {
+            const data = await API.RAG.list();
+            const kbs = data.kbs || [];
+            if (kbs.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i data-lucide="book-open"></i></div>
+                        <div class="empty-state-title">暂无知识库</div>
+                        <div class="empty-state-description">上传文档并构建您的第一个知识库</div>
+                    </div>`;
+            } else {
+                container.innerHTML = `
+                    <table class="data-table">
+                        <thead><tr>
+                            <th>名称</th><th>分块数</th><th>向量集合</th><th>Embedder</th><th>创建时间</th><th>操作</th>
+                        </tr></thead>
+                        <tbody>
+                            ${kbs.map(kb => `<tr>
+                                <td><strong>${kb.kb_name}</strong></td>
+                                <td>${kb.total_chunks}</td>
+                                <td><code style="font-size:12px;">${kb.collection || '-'}</code></td>
+                                <td>${kb.embedder || '-'}</td>
+                                <td>${kb.created_at ? new Date(kb.created_at).toLocaleString('zh-CN') : '-'}</td>
+                                <td><button class="btn btn-secondary btn-sm" onclick="deleteKB('${kb.kb_name}')">
+                                    <i data-lucide="trash-2" style="width:12px;height:12px;"></i> 删除
+                                </button></td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+            }
+            if (window.lucide) lucide.createIcons();
+            updateRAGSearchKBSelector(kbs);
+        } catch (error) {
+            console.error('Failed to load KB list:', error);
+        }
+    }
+
+    async function deleteKB(kbName) {
+        if (!confirm(`确定要删除知识库 "${kbName}" 吗？此操作不可恢复。`)) return;
+        try {
+            await API.RAG.delete(kbName);
+            refreshKBList();
+        } catch (error) {
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    function updateRAGSearchKBSelector(kbs) {
+        const sel = document.getElementById('rag-search-kb');
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">选择知识库...</option>';
+        (kbs || []).forEach(kb => {
+            sel.innerHTML += `<option value="${kb.kb_name}">${kb.kb_name} (${kb.total_chunks} chunks)</option>`;
+        });
+        if (cur) sel.value = cur;
+    }
+
+    async function searchRAGEvidence() {
+        const kbName = document.getElementById('rag-search-kb')?.value;
+        const query = document.getElementById('rag-search-query')?.value?.trim();
+        const topK = parseInt(document.getElementById('rag-search-topk')?.value) || 5;
+        const container = document.getElementById('rag-search-results');
+        if (!container) return;
+
+        if (!kbName) { alert('请选择知识库'); return; }
+        if (!query) { alert('请输入检索查询'); return; }
+
+        container.innerHTML = '<div style="padding:var(--spacing-md);color:var(--text-secondary);">检索中...</div>';
+        try {
+            const data = await API.RAG.search(kbName, query, topK);
+            const results = data.results || [];
+            if (results.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-title">未找到相关结果</div></div>';
+                return;
+            }
+            container.innerHTML = results.map((r, i) => `
+                <div style="border:1px solid var(--border-light);border-radius:var(--radius-md);padding:var(--spacing-md);margin-bottom:var(--spacing-sm);background:var(--bg-primary);">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:var(--spacing-xs);">
+                        <span style="font-weight:600;color:var(--text-primary);">#${i+1} ${r.chunk_id || ''}</span>
+                        <span style="display:flex;gap:var(--spacing-sm);align-items:center;">
+                            ${r.topic ? `<span style="background:var(--bg-tertiary);padding:2px 8px;border-radius:var(--radius-sm);font-size:12px;">${r.topic}</span>` : ''}
+                            <span style="color:var(--accent-primary);font-weight:600;">Score: ${(r.score || 0).toFixed(4)}</span>
+                        </span>
+                    </div>
+                    <div style="white-space:pre-wrap;font-size:13px;color:var(--text-secondary);max-height:200px;overflow-y:auto;line-height:1.6;">${escapeHtml(r.text || '')}</div>
+                    ${r.source_qa_ids && r.source_qa_ids.length ? `<div style="margin-top:var(--spacing-xs);font-size:11px;color:var(--text-tertiary);">Sources: ${r.source_qa_ids.join(', ')}</div>` : ''}
+                </div>
+            `).join('');
+        } catch (error) {
+            container.innerHTML = `<div style="padding:var(--spacing-md);color:var(--danger);">检索失败: ${error.message}</div>`;
+        }
+    }
+
+    function escapeHtml(text) {
+        const d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
+    }
+
+    async function exportKBChunks() {
+        const kbName = document.getElementById('rag-search-kb')?.value;
+        if (!kbName) { alert('请先选择知识库'); return; }
+        try {
+            const resp = await fetch(`/api/v1/rag/${kbName}/chunks`);
+            const json = await resp.json();
+            const data = json.data || json;
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${kbName}_chunks.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            alert('导出失败: ' + error.message);
+        }
+    }
+
+    // =========================================================================
+    // Settings functions
+    // =========================================================================
+    var _envVarsCache = [];
+
+    async function loadEnvVars() {
+        const container = document.getElementById('env-vars-container');
+        if (!container) return;
+        try {
+            const resp = await API.Settings.listEnv();
+            _envVarsCache = resp.variables || [];
+            // Group by provider prefix
+            const groups = {};
+            _envVarsCache.forEach(v => {
+                const prefix = v.key.split('_')[0];
+                if (!groups[prefix]) groups[prefix] = [];
+                groups[prefix].push(v);
+            });
+            container.innerHTML = Object.entries(groups).map(([prefix, vars]) => `
+                <div style="margin-bottom:var(--spacing-md);">
+                    <div style="font-weight:600;font-size:13px;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;">${prefix}</div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;">
+                        ${vars.map(v => `
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">${v.key}</label>
+                                <input type="${v.masked ? 'password' : 'text'}" 
+                                       class="form-input env-input" 
+                                       data-key="${v.key}" 
+                                       data-masked="${v.masked}"
+                                       value="${v.masked ? '' : (v.value || '')}" 
+                                       placeholder="${v.masked ? '••••' + (v.value ? v.value.slice(-4) : '') : '未设置'}"
+                                       style="font-size:13px;">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        } catch (error) {
+            container.innerHTML = '<div class="alert alert-error">加载环境变量失败: ' + error.message + '</div>';
+        }
+    }
+
+    async function saveEnvVars() {
+        const inputs = document.querySelectorAll('.env-input');
+        const updates = {};
+        inputs.forEach(input => {
+            const key = input.dataset.key;
+            const val = input.value.trim();
+            const wasMasked = input.dataset.masked === 'true';
+            // Only save if user actually typed something (not empty masked fields)
+            if (val && !(wasMasked && val === '')) {
+                updates[key] = val;
+            }
+        });
+        if (Object.keys(updates).length === 0) {
+            alert('没有需要保存的修改');
+            return;
+        }
+        try {
+            await API.Settings.updateEnv(updates);
+            alert('密钥已保存，已即时生效！');
+            loadEnvVars();
+        } catch (error) {
+            alert('保存失败: ' + error.message);
+        }
+    }
+
+    async function loadModelConfigs() {
+        const container = document.getElementById('model-configs-container');
+        if (!container) return;
+        try {
+            const resp = await API.Settings.listModelConfigs();
+            const configs = resp.configs || [];
+            if (configs.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center;">暂无模型配置，请在下方添加。</div>';
+                return;
+            }
+            container.innerHTML = configs.map(cfg => {
+                const provider = cfg._provider_file || cfg.provider || 'unknown';
+                const apiOk = cfg._api_key_configured;
+                return `
+                <div class="card mb-md" style="border:1px solid var(--border-color);">
+                    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;">
+                        <span style="font-weight:600;">
+                            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${apiOk ? 'var(--success-color)' : 'var(--error-color)'};margin-right:8px;"></span>
+                            ${provider} — ${cfg.model || '(未设置)'}
+                        </span>
+                        <div style="display:flex;gap:8px;">
+                            <button class="btn btn-secondary btn-sm" onclick="saveModelConfig('${provider}')">
+                                <i data-lucide="save" style="width:12px;height:12px;"></i> 保存
+                            </button>
+                            <button class="btn btn-sm" style="color:var(--error-color);border:1px solid var(--error-color);background:transparent;" onclick="deleteModelConfig('${provider}')">
+                                <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body" style="padding:12px 16px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:11px;">Model ID</label>
+                                <input type="text" class="form-input model-cfg-input" data-provider="${provider}" data-field="model" value="${cfg.model || ''}" style="font-size:13px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:11px;">Base URL</label>
+                                <input type="text" class="form-input model-cfg-input" data-provider="${provider}" data-field="base_url" value="${cfg.base_url || ''}" style="font-size:13px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:11px;">Temperature</label>
+                                <input type="number" class="form-input model-cfg-input" data-provider="${provider}" data-field="temperature" value="${cfg.temperature ?? 0.0}" min="0" max="2" step="0.1" style="font-size:13px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:11px;">Top P</label>
+                                <input type="number" class="form-input model-cfg-input" data-provider="${provider}" data-field="top_p" value="${cfg.top_p ?? 1.0}" min="0" max="1" step="0.05" style="font-size:13px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:11px;">Max Tokens</label>
+                                <input type="number" class="form-input model-cfg-input" data-provider="${provider}" data-field="max_tokens" value="${cfg.max_tokens ?? 2048}" min="1" max="128000" style="font-size:13px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:11px;">Seed</label>
+                                <input type="number" class="form-input model-cfg-input" data-provider="${provider}" data-field="seed" value="${cfg.seed ?? ''}" placeholder="可选" style="font-size:13px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:11px;">Batch Size</label>
+                                <input type="number" class="form-input model-cfg-input" data-provider="${provider}" data-field="batch_size" value="${cfg.batch_size ?? 10}" min="1" max="100" style="font-size:13px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:11px;">Timeout (s)</label>
+                                <input type="number" class="form-input model-cfg-input" data-provider="${provider}" data-field="request_timeout_s" value="${cfg.request_timeout_s ?? 60}" min="5" max="600" style="font-size:13px;">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+                            <label class="form-label" style="font-size:11px;">System Prompt</label>
+                            <textarea class="form-input model-cfg-input" data-provider="${provider}" data-field="system_prompt" rows="2" style="font-size:13px;resize:vertical;">${cfg.system_prompt || 'You are a helpful assistant.'}</textarea>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        } catch (error) {
+            container.innerHTML = '<div class="alert alert-error">加载模型配置失败: ' + error.message + '</div>';
+        }
+    }
+
+    function refreshModelConfigs() {
+        loadModelConfigs();
+    }
+
+    async function saveModelConfig(provider) {
+        const inputs = document.querySelectorAll(`.model-cfg-input[data-provider="${provider}"]`);
+        const config = { provider: provider };
+        inputs.forEach(input => {
+            const field = input.dataset.field;
+            let val = input.value.trim();
+            if (field === 'temperature' || field === 'top_p') val = parseFloat(val) || 0;
+            else if (field === 'max_tokens' || field === 'batch_size' || field === 'request_timeout_s') val = parseInt(val) || 0;
+            else if (field === 'seed') val = val ? parseInt(val) : null;
+            if (val !== null && val !== '') config[field] = val;
+        });
+        try {
+            await API.Settings.updateModelConfig(provider, config);
+            alert(`${provider} 配置已保存！`);
+        } catch (error) {
+            alert('保存失败: ' + error.message);
+        }
+    }
+
+    async function deleteModelConfig(provider) {
+        if (!confirm(`确定要删除 ${provider} 的配置？`)) return;
+        try {
+            await API.Settings.deleteModelConfig(provider);
+            loadModelConfigs();
+        } catch (error) {
+            alert('删除失败: ' + error.message);
+        }
+    }
+
+    async function addNewModelConfig() {
+        const provider = document.getElementById('new-model-provider').value;
+        const modelId = document.getElementById('new-model-id').value.trim();
+        const baseUrl = document.getElementById('new-model-baseurl').value.trim();
+        if (!provider) { alert('请选择 Provider'); return; }
+        if (!modelId) { alert('请填写 Model ID'); return; }
+
+        const config = {
+            provider: provider,
+            model: modelId,
+            temperature: 0.0,
+            top_p: 1.0,
+            max_tokens: 2048,
+            seed: 42,
+            system_prompt: 'You are a helpful assistant.',
+            batch_size: 10,
+            request_timeout_s: 60,
+        };
+        if (baseUrl) config.base_url = baseUrl;
+
+        // Set default env var references for api_key
+        const envMap = {
+            deepseek: { api_key: '${DEEPSEEK_API_KEY}', base_url: '${DEEPSEEK_BASE_URL}' },
+            openai: { api_key: '${OPENAI_API_KEY}', base_url: '${OPENAI_BASE_URL}' },
+            anthropic: { api_key: '${ANTHROPIC_API_KEY}' },
+            qwen: { api_key: '${QWEN_API_KEY}', base_url: '${QWEN_BASE_URL}' },
+            huggingface: { api_key: '${HF_TOKEN}' },
+        };
+        const defaults = envMap[provider] || {};
+        if (defaults.api_key) config.api_key = defaults.api_key;
+        if (!baseUrl && defaults.base_url) config.base_url = defaults.base_url;
+
+        try {
+            await API.Settings.createModelConfig(provider, config);
+            alert(`${provider} 配置已创建！`);
+            document.getElementById('new-model-provider').value = '';
+            document.getElementById('new-model-id').value = '';
+            document.getElementById('new-model-baseurl').value = '';
+            loadModelConfigs();
+        } catch (error) {
+            if (error.message && error.message.includes('already exists')) {
+                alert(`${provider} 配置已存在，请在上方直接编辑。`);
+            } else {
+                alert('创建失败: ' + error.message);
+            }
+        }
+    }
+
+    // =========================================================================
+    // Prompt Template Management
+    // =========================================================================
+    let allPrompts = [];
+    let currentEditingPrompt = null;
+
+    async function refreshPromptsList() {
+        const container = document.getElementById('prompts-list-container');
+        if (!container) return;
+        
+        try {
+            const response = await fetch('/api/v1/prompts');
+            const data = await response.json();
+            allPrompts = data.data?.prompts || [];
+            renderPromptsList();
+        } catch (error) {
+            container.innerHTML = '<div class="alert alert-error">加载提示词列表失败: ' + error.message + '</div>';
+        }
+    }
+
+    function onPromptFilterChange() {
+        renderPromptsList();
+    }
+
+    function renderPromptsList() {
+        const container = document.getElementById('prompts-list-container');
+        if (!container) return;
+
+        const taskTypeFilter = document.getElementById('prompt-task-type')?.value || '';
+        const strategyFilter = document.getElementById('prompt-strategy')?.value || '';
+
+        let filtered = allPrompts;
+        if (taskTypeFilter) {
+            filtered = filtered.filter(p => p.task_type === taskTypeFilter);
+        }
+        if (strategyFilter) {
+            filtered = filtered.filter(p => p.strategy === strategyFilter);
+        }
+
+        if (filtered.length === 0) {
+            container.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center;">没有匹配的提示词模板</div>';
+            return;
+        }
+
+        // Group by task_type
+        const grouped = {};
+        filtered.forEach(p => {
+            if (!grouped[p.task_type]) grouped[p.task_type] = [];
+            grouped[p.task_type].push(p);
+        });
+
+        container.innerHTML = Object.entries(grouped).map(([taskType, prompts]) => `
+            <div style="margin-bottom:16px;">
+                <div style="font-weight:600;font-size:13px;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;">${taskType}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                    ${prompts.map(p => `
+                        <button class="btn btn-secondary btn-sm" onclick="openPromptEditor('${p.task_type}', '${p.strategy}')" style="font-family:monospace;">
+                            <i data-lucide="file-code" style="width:14px;height:14px;"></i> ${p.strategy}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `).join('');
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    async function openPromptEditor(taskType, strategy) {
+        currentEditingPrompt = { taskType, strategy };
+        
+        const modal = document.getElementById('prompt-editor-modal');
+        const title = document.getElementById('prompt-editor-title');
+        const path = document.getElementById('prompt-editor-path');
+        const vars = document.getElementById('prompt-editor-vars');
+        const content = document.getElementById('prompt-editor-content');
+        const error = document.getElementById('prompt-editor-error');
+
+        title.textContent = `编辑提示词: ${taskType}/${strategy}`;
+        error.style.display = 'none';
+
+        try {
+            const response = await fetch(`/api/v1/prompts/${taskType}/${strategy}`);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.detail || '加载失败');
+            }
+
+            const promptData = data.data;
+            path.textContent = promptData.file_path;
+            vars.innerHTML = promptData.variables.length > 0 
+                ? '变量: ' + promptData.variables.map(v => `<code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;font-size:11px;">{${v}}</code>`).join(' ')
+                : '';
+            content.value = promptData.content;
+            
+            modal.style.display = 'flex';
+            content.focus();
+        } catch (err) {
+            alert('加载提示词失败: ' + err.message);
+        }
+    }
+
+    function closePromptEditor() {
+        document.getElementById('prompt-editor-modal').style.display = 'none';
+        currentEditingPrompt = null;
+    }
+
+    async function validatePromptContent() {
+        if (!currentEditingPrompt) return;
+
+        const content = document.getElementById('prompt-editor-content').value;
+        const error = document.getElementById('prompt-editor-error');
+        const vars = document.getElementById('prompt-editor-vars');
+
+        try {
+            const response = await fetch(`/api/v1/prompts/${currentEditingPrompt.taskType}/${currentEditingPrompt.strategy}/validate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+            const data = await response.json();
+            const result = data.data;
+
+            if (result.valid) {
+                error.style.display = 'block';
+                error.style.background = 'var(--success-bg)';
+                error.style.color = 'var(--success-color)';
+                error.innerHTML = '✓ YAML 语法正确' + (result.warnings.length > 0 ? '<br>警告: ' + result.warnings.join(', ') : '');
+            } else {
+                error.style.display = 'block';
+                error.style.background = 'var(--error-bg)';
+                error.style.color = 'var(--error-color)';
+                error.textContent = '✗ ' + result.errors.join(', ');
+            }
+
+            // Update variables display
+            if (result.variables && result.variables.length > 0) {
+                vars.innerHTML = '变量: ' + result.variables.map(v => `<code style="background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;font-size:11px;">{${v}}</code>`).join(' ');
+            }
+        } catch (err) {
+            error.style.display = 'block';
+            error.style.background = 'var(--error-bg)';
+            error.style.color = 'var(--error-color)';
+            error.textContent = '验证请求失败: ' + err.message;
+        }
+    }
+
+    async function savePromptContent() {
+        if (!currentEditingPrompt) return;
+
+        const content = document.getElementById('prompt-editor-content').value;
+        const error = document.getElementById('prompt-editor-error');
+
+        try {
+            const response = await fetch(`/api/v1/prompts/${currentEditingPrompt.taskType}/${currentEditingPrompt.strategy}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || '保存失败');
+            }
+
+            error.style.display = 'block';
+            error.style.background = 'var(--success-bg)';
+            error.style.color = 'var(--success-color)';
+            error.textContent = '✓ 保存成功！';
+
+            setTimeout(() => {
+                closePromptEditor();
+            }, 800);
+        } catch (err) {
+            error.style.display = 'block';
+            error.style.background = 'var(--error-bg)';
+            error.style.color = 'var(--error-color)';
+            error.textContent = '保存失败: ' + err.message;
+        }
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+        refreshDashboard();
+        refreshDatasetsList();
+        updateTaskTypeHint(document.getElementById('task-type')?.value || 'qa');
+
+        // Initialize uploader manually if not already initialized
+        if (typeof initUploader === 'function') {
+            initUploader();
+        } else if (typeof DatasetUploader !== 'undefined' && !window.datasetUploader) {
+            console.log('Manually initializing DatasetUploader');
+            window.datasetUploader = new DatasetUploader();
+        }
+        
+        if (typeof initExperimentManager === 'function' && !window.experimentManager) initExperimentManager();
+        if (typeof initResultsVisualizer === 'function' && !window.resultsVisualizer) initResultsVisualizer();
+        
+        // Bind upload button
+        const uploadBtn = document.getElementById('upload-btn');
+        if (uploadBtn) {
+            uploadBtn.addEventListener('click', () => {
+                console.log('Upload button clicked, datasetUploader:', window.datasetUploader);
+                if (window.datasetUploader) {
+                    window.datasetUploader.upload();
+                } else {
+                    console.error('datasetUploader not initialized, DatasetUploader class:', typeof DatasetUploader);
+                    // Try to initialize now
+                    if (typeof DatasetUploader !== 'undefined') {
+                        console.log('Attempting emergency initialization');
+                        window.datasetUploader = new DatasetUploader();
+                        window.datasetUploader.upload();
+                    } else {
+                        alert('上传功能未初始化，请刷新页面重试');
+                    }
+                }
+            });
+        }
+
+        // Load settings data
+        loadEnvVars();
+        loadModelConfigs();
+        refreshPromptsList();
+        refreshKBList();
+
+        API.fetchExperiments({ status: 'finished' }).then(experiments => {
+            const select = document.getElementById('results-experiment-select');
+            if (select) {
+                select.innerHTML = `<option value="">${I18N ? I18N.t('results.select_exp') : '选择实验查看结果...'}</option>` +
+                    experiments.map(e => `<option value="${e.experiment_id}">${e.name}</option>`).join('');
+            }
+        });
+
+        // Re-init Lucide icons for dynamically rendered content
+        setTimeout(() => { if (window.lucide) lucide.createIcons(); }, 100);
+    });
+</script>
+{% endblock %}

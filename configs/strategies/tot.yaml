@@ -1,0 +1,54 @@
+name: tot
+library: langchain-experimental
+chain_type: ToTChain
+
+# ---------------------------------------------------------------------------
+# Default prompts (fallback when no task-specific override exists).
+# Task-specific prompts live in configs/strategies/tot_prompts/<task_type>.yaml
+# and are automatically merged at runtime.
+# ---------------------------------------------------------------------------
+prompts:
+  system: |
+    You are a creative problem solver. Generate one possible approach to the problem below. Be concise but thorough in your reasoning.
+
+  # -- Fallback prompts for non-BFS paths --
+  user_exam: |
+    {question}
+
+    {options_text}
+
+    Think of one possible approach to solve this. End with: Answer: X
+  user_qa: |
+    {question}
+
+    Think of one possible approach to solve this. End with: Answer: <your answer>
+
+generation:
+  temperature: 0.7
+  max_tokens: 2048
+
+tot_config:
+  # Search method: "bfs" (breadth-first) or "dfs" (depth-first)
+  # BFS: expand all candidates per layer, evaluate, keep top-k. Good for MCQ.
+  # DFS: explore one path deeply, prune impossible branches, backtrack. Good for open QA.
+  search_method: bfs
+
+  # Common parameters
+  k: 3                    # candidates per generation step (BFS width / DFS branching)
+  depth: 3                # max search depth (BFS layers / DFS recursion limit)
+  n_evaluate_sample: 3    # LLM calls per evaluation
+  method_generate: sample  # "sample" (n independent samples) or "propose" (one-shot list)
+  method_evaluate: value   # "value" (score each path) or "vote" (pick best via voting)
+  prompt_sample: cot       # "cot" or "standard" generation prompt
+
+  # BFS-specific
+  n_select_sample: 3      # candidates to keep per BFS layer
+  method_select: greedy    # "greedy" (top-k by score) or "sample" (probabilistic)
+
+  # DFS-specific
+  max_dfs_nodes: 20       # max nodes to visit before stopping (prevents runaway)
+
+parse:
+  answer_pattern: "[Aa]nswer\\s*[：:]\\s*(.+)"
+  choice_pattern: "\\b([A-D])\\b"
+  trace_split: "\n"

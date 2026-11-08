@@ -1,0 +1,68 @@
+{
+  "dataset_name": "Experiment 4 MCP-Bench Core Local 30",
+  "dataset_version": "1.0.0",
+  "case_count": 30,
+  "source": "Accenture/mcp-bench local server implementations and task metadata",
+  "network_policy": "offline-only; outbound network is not required or permitted",
+  "comparison_axis": [
+    "mock",
+    "sandbox",
+    "local_mcp"
+  ],
+  "server_count": 5,
+  "servers": {
+    "unit_converter": "Unit Converter",
+    "time": "Time MCP",
+    "math": "Math MCP",
+    "scientific_computing": "Scientific Computing",
+    "medical_calculator": "Medical Calculator"
+  },
+  "source_task_ids": {
+    "unit_converter": [
+      "unit_converter_000",
+      "unit_converter_001"
+    ],
+    "time": [
+      "time_mcp_000",
+      "time_mcp_001"
+    ],
+    "math": [
+      "math_mcp_000",
+      "math_mcp_001"
+    ],
+    "scientific_computing": [
+      "scientific_computing_000",
+      "scientific_computing_001"
+    ],
+    "medical_calculator": [
+      "medical_calculator_000",
+      "medical_calculator_001"
+    ]
+  },
+  "topology_counts": {
+    "single_server": 18,
+    "three_server": 4,
+    "two_server": 8
+  },
+  "difficulty_counts": {
+    "L1": 8,
+    "L2": 8,
+    "L3": 6,
+    "L4": 8
+  },
+  "challenge_counts": {
+    "conditional_recovery": 1,
+    "cross_server_handoff": 6,
+    "error_recovery": 4,
+    "long_horizon": 3,
+    "schema_strictness": 8,
+    "sequential_dependency": 8
+  },
+  "persistent_session_case_count": 10,
+  "sha256": "668e15542011f7f8795533b0ff0513bce2786c80519d27b207c5f7c3f589f6c3",
+  "reference_syntax": {
+    "$ref": "<step_id>.<path>; references must point to an earlier oracle step",
+    "transform": "optional deterministic transform such as hour"
+  },
+  "evaluation_policy": "rule-based goals are primary; LLM judging is not required"
+}

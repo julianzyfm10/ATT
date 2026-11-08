@@ -1,0 +1,105 @@
+id: api_calling.tot
+task_type: api_calling
+strategy: tot
+version: "1.0"
+
+system_prompt: |
+  You are a creative problem-solving agent. Generate one possible approach to accomplish the given goal using the available tools.
+
+instruction_template: |
+  Goal: {user_goal}
+
+  Available tools:
+  {tools_text}
+
+  Propose one approach to accomplish this goal. For each tool call, output:
+  Action: tool_name({{"param": "value"}})
+  End with: Answer: <your final answer>
+
+output_format: json_tool_call
+
+# ---------------------------------------------------------------------------
+# ToT BFS prompt templates for API/tool calling tasks
+# Variables: generate_*/evaluate_value use {problem} {thoughts};
+#            evaluate_vote uses {problem} {choices};
+#            extract_answer uses {problem} {best_candidate}.
+# Note: {problem} here is the user_goal text (set by build_problem_description).
+# ---------------------------------------------------------------------------
+
+generate_cot: |
+  You are planning how to accomplish a goal using available tools, step by step.
+  Each step, decide the NEXT tool to call and why.
+  If previous reasoning is provided, continue from where it left off — do NOT repeat steps already planned.
+  Write only the NEXT step (1-3 sentences). Do NOT repeat or rephrase previous steps.
+
+  Example 1 (first step, no previous reasoning):
+  Goal: Search for the weather in Beijing and send the result to user@example.com
+  Previous reasoning: (none yet — start with the first tool call)
+  Next step: Step 1: Call weather_query(city="Beijing") to get current weather data.
+
+  Example 2 (continuing from previous step):
+  Previous reasoning: Step 1: Call weather_query(city="Beijing") to get current weather data.
+  Next step: Step 2: Call send_email(to="user@example.com", body=weather_result) to deliver the result.
+
+  Goal:
+  {problem}
+
+  Previous reasoning:
+  {thoughts}
+
+  Next step:
+
+generate_standard: |
+  Continue planning how to accomplish the following goal using available tools.
+  Write only the NEXT step (1-2 sentences). Do NOT repeat previous steps.
+
+  Goal:
+  {problem}
+
+  Previous reasoning:
+  {thoughts}
+
+  Next step:
+
+evaluate_value: |
+  Evaluate if the following tool-calling plan can accomplish the stated goal. Rate as: sure/likely/impossible.
+
+  Example 1:
+  Goal: Send a notification email to admin@company.com about server downtime
+  Plan: Call send_email(to="admin@company.com", subject="Server Downtime Alert", body="Server X is down since 10:00").
+  Evaluation: The plan directly accomplishes the goal with a single correct API call.
+  sure
+
+  Example 2:
+  Goal: Get the average response time of API endpoints over the past 24 hours
+  Plan: Call list_endpoints() to get all endpoint names.
+  Evaluation: This is a reasonable first step but incomplete — still needs to query metrics for each endpoint and compute the average.
+  likely
+
+  Example 3:
+  Goal: Delete all inactive users from the database
+  Plan: Call create_user(name="test") to create a new user.
+  Evaluation: The plan calls a completely unrelated API. Creating a user does not help delete inactive users.
+  impossible
+
+  Now evaluate:
+  Goal: {problem}
+  Plan: {thoughts}
+  Evaluation:
+
+evaluate_vote: |
+  Given a goal and several candidate tool-calling plans, decide which plan most effectively accomplishes the goal. Consider correctness, completeness, and efficiency. Analyze each choice in detail, then conclude in the last line "The best choice is {{s}}", where s is the integer id of the choice.
+
+  Goal: {problem}
+
+  {choices}
+
+extract_answer: |
+  {problem}
+
+  Based on the following tool-calling plan:
+  {best_candidate}
+
+  Provide the final sequence of tool calls needed. Use the format:
+  Action: tool_name(param=value)
+  Answer:

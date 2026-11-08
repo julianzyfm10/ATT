@@ -1,0 +1,84 @@
+{
+  "tool_id": "search_api",
+  "category": "information_retrieval",
+  "subcategory": "web_search",
+  "core_description": "Search the web. Input: query string. Returns: list of results with title, snippet, url.",
+  "business_scenario": "User needs to find information from the internet.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string"
+      },
+      "top_k": {
+        "type": "integer",
+        "default": 3
+      }
+    },
+    "required": [
+      "query"
+    ]
+  },
+  "return_schema": {
+    "type": "array",
+    "items": {
+      "type": "object"
+    }
+  },
+  "mock_responses": [
+    {
+      "condition": {
+        "query__contains": "气候变化"
+      },
+      "response": {
+        "results": [
+          {
+            "title": "IPCC报告",
+            "snippet": "全球平均温度已上升1.1°C。",
+            "url": "https://ipcc.ch"
+          }
+        ]
+      }
+    },
+    {
+      "condition": {
+        "query__contains": "深度学习"
+      },
+      "response": {
+        "results": [
+          {
+            "title": "深度学习综述",
+            "snippet": "多层神经网络表示学习。",
+            "url": "https://example.com/dl"
+          }
+        ]
+      }
+    },
+    {
+      "condition": {
+        "query__contains": "Python"
+      },
+      "response": {
+        "results": [
+          {
+            "title": "Python官方文档",
+            "snippet": "Python是解释型高级编程语言。",
+            "url": "https://docs.python.org"
+          }
+        ]
+      }
+    },
+    {
+      "condition": "default",
+      "response": {
+        "results": [
+          {
+            "title": "搜索结果",
+            "snippet": "找到相关信息。",
+            "url": "https://example.com"
+          }
+        ]
+      }
+    }
+  ]
+}
