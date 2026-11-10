@@ -12,6 +12,17 @@ rule
 
 # Experiment outputs (do not push)
 outputs/
+/rebuttal_weakness1/
+
+# Supplementary experiments: publish source only; inputs and outputs stay local.
+/supplementary experiment/*
+!/supplementary experiment/README.md
+!/supplementary experiment/prep_e0.py
+!/supplementary experiment/Exp[1-4]/
+/supplementary experiment/Exp[1-4]/*
+!/supplementary experiment/Exp[1-4]/*.py
+!/supplementary experiment/Exp[1-4]/*.ps1
+!/supplementary experiment/Exp1/common_judge_prompt.txt
 
 # Runtime experiment state (API-created sessions)
 data/experiments/
